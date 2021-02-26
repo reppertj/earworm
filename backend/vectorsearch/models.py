@@ -15,7 +15,7 @@ class Artist(models.Model):
 
 class Album(models.Model):
     name = models.CharField(max_length=50)
-    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL)
+    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True)
 
 
 class Embedder(models.Model):
@@ -33,9 +33,9 @@ class BaseVector(models.Model):
 
 class Song(models.Model):
     external_url = models.URLField(max_length=200)
-    licenses = models.ManytoMany(License, related_name="songs")
-    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL)
-    album = models.ForeignKey(Album, on_delete=models.SET_NULL)
+    licenses = models.ManyToManyField(License, related_name="songs")
+    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True)
+    album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True)
 
 
 class ResultVector(BaseVector):
