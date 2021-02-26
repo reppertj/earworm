@@ -6,24 +6,24 @@ from .utils.json_tools import NumpyEncoder
 
 
 class License(models.Model):
-    abbreviation = models.CharField(max_length=20)
-    name = models.CharField(max_length=50)
-    description = models.TextField()
+    abbreviation = models.CharField(max_length=20, editable=False)
+    name = models.CharField(max_length=50, editable=False)
+    description = models.TextField(editable=False)
 
 
 class Artist(models.Model):
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, editable=False)
 
 
 class Album(models.Model):
-    name = models.CharField(max_length=50)
-    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True)
+    name = models.CharField(max_length=50, editable=False)
+    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True, editable=False)
 
 
 class Embedder(models.Model):
-    name = models.CharField(max_length=50)
-    vector_length = models.PositiveSmallIntegerField()
-    precision = models.PositiveSmallIntegerField()
+    name = models.CharField(max_length=50, editable=False)
+    vector_length = models.PositiveSmallIntegerField(editable=False)
+    precision = models.PositiveSmallIntegerField(editable=False)
 
 
 class BaseVector(models.Model):
@@ -34,17 +34,18 @@ class BaseVector(models.Model):
 
 
 class Song(models.Model):
-    external_url = models.URLField(max_length=200)
-    licenses = models.ManyToManyField(License, related_name="songs")
-    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True)
-    album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True)
+    external_url = models.URLField(max_length=200, editable=False)
+    licenses = models.ManyToManyField(License, related_name="songs", editable=False)
+    artist = models.ForeignKey(Artist, on_delete=models.SET_NULL, null=True, editable=False)
+    album = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, editable=False)
 
 
 class ResultVector(BaseVector):
-    song = models.ForeignKey(Song, on_delete=models.CASCADE)
-    embedder = models.ForeignKey(Embedder, on_delete=models.CASCADE)
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, editable=False)
+    embedder = models.ForeignKey(Embedder, on_delete=models.CASCADE, editable=False)
 
 
 class QueryVector(BaseVector):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    spectrogram_hash = models.CharField(max_length=200, null=True)
     embedder = models.ForeignKey(Embedder, on_delete=models.PROTECT)
