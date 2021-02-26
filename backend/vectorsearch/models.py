@@ -10,7 +10,7 @@ class License(models.Model):
 
 
 class Artist(models.Model):
-    name = models.CharField(max_length=50, on_delete=models.SET_NULL)
+    name = models.CharField(max_length=50)
 
 
 class Album(models.Model):
