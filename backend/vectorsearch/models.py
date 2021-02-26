@@ -2,6 +2,8 @@ import uuid
 
 from django.db import models
 
+from .utils.json_tools import NumpyEncoder
+
 
 class License(models.Model):
     abbreviation = models.CharField(max_length=20)
@@ -25,7 +27,7 @@ class Embedder(models.Model):
 
 
 class BaseVector(models.Model):
-    vector = models.JSONField(encoder=None, decoder=None)
+    vector = models.JSONField(encoder=NumpyEncoder)
 
     class Meta:
         abstract = True
