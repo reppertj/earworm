@@ -1,5 +1,5 @@
 import torch
-from modules.convolution import HardSigmoid # type: ignore
+from src.modules.convolution import HardSigmoid # type: ignore
 from torch import nn
 
 

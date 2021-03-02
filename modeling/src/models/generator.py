@@ -11,7 +11,7 @@ class SuperResolutionGenerator(nn.Module):
         self.channels_out = 1
         self.latent_size = latent_size
         self.layers = [
-            nn.ConvTranspose2d(self.latent_size, feature_depth * 16, (4, 5), 1, 0, bias=False),
+            nn.ConvTranspose2d(self.latent_size, feature_depth * 16, (1, 4), 1, 0, bias=False),
             nn.BatchNorm2d(feature_depth * 16),
             nn.ReLU(),
             nn.ConvTranspose2d(feature_depth * 16, feature_depth * 8, (4, 5), 2, 1, bias=False),
@@ -32,6 +32,7 @@ class SuperResolutionGenerator(nn.Module):
             nn.ConvTranspose2d(feature_depth, self.channels_out * 4, 4, 2, 1, bias=False),
             nn.ReLU(),
             nn.PixelShuffle(2),
+            nn.Tanh()
         ]
         self.model = nn.Sequential(*self.layers)
         self._init_weights()

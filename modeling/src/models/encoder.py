@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-from modules.residual import SqueezeExcite, Identity, MobileBlock, ResidualBlock  # type: ignore
-from modules.convolution import make_conv, HardSwish  # type: ignore
+from src.modules.residual import SqueezeExcite, Identity, MobileBlock, ResidualBlock  # type: ignore
+from src.modules.convolution import make_conv, HardSwish  # type: ignore
 
 
 class MobileNetLikeEncoder(nn.Module):
