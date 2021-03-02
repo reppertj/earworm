@@ -1,7 +1,7 @@
 from torch import nn
 import torch
-from modules.residual import SqueezeExcite, Identity, MobileBlock, ResidualBlock  # type: ignore
-from modules.convolution import make_conv, HardSwish  # type: ignore
+from src.modules.residual import SqueezeExcite, Identity, MobileBlock, ResidualBlock  # type: ignore
+from src.modules.convolution import make_conv, HardSwish  # type: ignore
 
 
 class MulticlassDiscriminator(nn.Module):
@@ -11,7 +11,7 @@ class MulticlassDiscriminator(nn.Module):
         super().__init__()
         self.n_classes = n_classes
         self.latent_size = latent_size
-        self.image_side = [
+        self.sgram_side = [
             make_conv(
                 transpose=False,
                 in_channels=1,
@@ -40,12 +40,12 @@ class MulticlassDiscriminator(nn.Module):
         i_ch = 16
         for k, h_ch, out_ch, se, nl, s in middle_layer_params:
             if s == 1 and i_ch == out_ch:
-                self.image_side.append(ResidualBlock(i_ch, h_ch, out_ch, k, s, se, nl))
+                self.sgram_side.append(ResidualBlock(i_ch, h_ch, out_ch, k, s, se, nl))
             else:
-                self.image_side.append(MobileBlock(i_ch, h_ch, out_ch, k, s, se, nl))
+                self.sgram_side.append(MobileBlock(i_ch, h_ch, out_ch, k, s, se, nl))
             i_ch = out_ch
         # add last few layers
-        self.image_side.append(
+        self.sgram_side.append(
             make_conv(
                 transpose=False,
                 in_channels=i_ch,
@@ -55,9 +55,9 @@ class MulticlassDiscriminator(nn.Module):
                 padding=0,
             )
         )
-        self.image_side.append(nn.AdaptiveAvgPool2d(1))
-        self.image_side.append(nn.Conv2d(576, 576, 1, 1, 0))
-        self.image_side = nn.Sequential(*self.image_side)
+        self.sgram_side.append(nn.AdaptiveAvgPool2d(1))
+        self.sgram_side.append(nn.Conv2d(576, 576, 1, 1, 0))
+        self.sgram_side = nn.Sequential(*self.sgram_side)
 
         self.latent_side = nn.Sequential(
             nn.Linear(self.latent_size, 512),
@@ -90,9 +90,9 @@ class MulticlassDiscriminator(nn.Module):
                     nn.init.zeros_(m.bias)
 
     def forward(self, x):
-        image, latent = x
-        x_image = self.image_side(image).squeeze(3).squeeze(2)
+        sgram, latent = x
+        x_sgram = self.sgram_side(sgram).squeeze(3).squeeze(2)
         x_latent = self.latent_side(latent)
-        x = torch.cat((x_image, x_latent), dim=1)
+        x = torch.cat((x_sgram, x_latent), dim=1)
         x = self.combined_classifier(x)
         return x
