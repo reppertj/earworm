@@ -1,13 +1,14 @@
 import sys
 import os
 import logging
-from typing import Iterable, Tuple
+from typing import Iterable, List, Tuple
 
 import numpy as np
 import torch
 from torch import nn
 import torchaudio
-from torchaudio.transforms import MFCC, MelSpectrogram, Resample, AmplitudeToDB
+from pathos.threading import ThreadPool
+from torchaudio.transforms import MFCC, Resample
 import torchlibrosa
 
 logger = logging.getLogger()
@@ -30,37 +31,113 @@ class AudioTooShortError(ValueError):
     pass
 
 
-class JittableLogmelFilterBank(torchlibrosa.LogmelFilterBank):
-    """
-    log10 is not in the ONNX opset; subclass and override a method that uses it. :(
-    """
+# class JittableLogmelFilterBank(torchlibrosa.LogmelFilterBank):
+#     """
+#     Cannot have literal infinity in the model graph for tensorflow.js 32bit
+#     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
 
-    def power_to_db(self, input):
-        r"""Power to db, this function is the pytorch implementation of
-        librosa.power_to_lb
-        """
-        ref_value = self.ref
-        log_spec = (
-            10.0
-            * torch.log(torch.clamp(input, min=self.amin, max=np.inf))
-            / torch.log(torch.tensor(10.0))
-        )
-        log_spec -= 10.0 * np.log10(np.maximum(self.amin, ref_value))
+#     def power_to_db(self, input):
+#         r"""Power to db, this function is the pytorch implementation of
+#         librosa.power_to_lb
+#         """
+#         GIANT_32B_UFLOAT = torch.tensor(2.0 ** 126, dtype=torch.float32)
+#         ref_value = self.ref
+#         log_spec = (
+#             10.0
+#             * torch.log(torch.clamp(input, min=self.amin, max=GIANT_32B_UFLOAT))
+#             / torch.log(torch.tensor(10.0))
+#         )
+#         log_spec -= 10.0 * np.log10(np.maximum(self.amin, ref_value))
 
-        if self.top_db is not None:
-            if self.top_db < 0:
-                raise ValueError("top_db must be non-negative")
-            log_spec = torch.clamp(
-                log_spec, min=log_spec.max().item() - self.top_db, max=np.inf
-            )
+#         if self.top_db is not None:
+#             if self.top_db < 0:
+#                 raise ValueError("top_db must be non-negative")
+#             log_spec = torch.clamp(
+#                 log_spec, min=log_spec.max().item() - self.top_db, max=GIANT_32B_UFLOAT
+#             )
 
-        return log_spec
+#         return log_spec
 
 
-class JittableWaveformtoTensor(nn.Module):
+# class JittableWaveformtoTensor(nn.Module):
+#     def __init__(
+#         self,
+#         sample_rate: int = 15950,
+#         seconds: float = 10.0,
+#         win_length: int = 1024,
+#         hop_length: int = 256,
+#         n_mels: int = 128,
+#     ):
+#         """
+#         Jittable class for onnx export. Zero centers and normalizes, resamples, and
+#         returns mel spectrogram.
+#         Does NOT trim length or standardize outputs.
+#         """
+#         super().__init__()
+#         self.sample_rate = sample_rate
+#         self.seconds = seconds
+#         self.min_samples = int(sample_rate * seconds)
+#         self.win_length = win_length
+#         self.hop_length = hop_length
+#         self.n_mels = n_mels
+#         self.sample_input = torch.randn(
+#             (1, int(self.sample_rate * self.seconds)), dtype=torch.float32
+#         )
+
+#         self.mel_spectogram = nn.Sequential(
+#             torchlibrosa.Spectrogram(
+#                 n_fft=self.win_length,
+#                 hop_length=self.hop_length,
+#                 win_length=self.win_length,
+#             ),
+#             JittableLogmelFilterBank(
+#                 sr=self.sample_rate,
+#                 n_fft=self.win_length,
+#                 n_mels=self.n_mels,
+#             ),
+#         )
+
+#     def forward(self, waveform):
+#         # Input shape (n_channels, time)
+#         # Zero center and normalize to [-1, 1] to match torchaudio.load()
+#         # TODO: Normalize IN THE AUDIO PREPROCESSING IN THE MODEL!! THE JS SHOULD SEND AN AUDIO
+#         # data tensor NOT normalized in any way
+#         waveform = waveform.sub(waveform.mean())
+#         waveform = waveform.div(waveform.abs().max())
+#         waveform = waveform.mean(dim=0, keepdims=True)
+#         sgram = self.mel_spectogram(waveform)
+#         return sgram.transpose(2, 3).squeeze(0)
+
+
+class TensorPreprocesser:
+    def __init__(self) -> None:
+        self.model = WaveformToDBSpectrogram()
+    
+    def __call__(self, in_paths: List[str], out_paths: List[str], mfcc=False, n_workers=2) -> None:        
+        def write_out(inp, out):
+            try:
+                tensor = self.model.from_path(inp, mfcc)
+                dir = os.path.dirname(out)
+                if not os.path.exists(dir):
+                    os.mkdir(dir)
+                torch.save(tensor, out)
+                print("Success:", out)
+                return (out, True)
+            except:
+                print("Failure:", out)
+                return (out, False)
+                            
+        with ThreadPool(nodes=n_workers) as P:
+            results = P.imap(write_out, in_paths, out_paths)
+        successes = [path for path, res in results if res]
+        failures = [path for path, res in results if not res]
+        return successes, failures
+    
+
+class JSSupportedMelSpectrogram(nn.Module):
     def __init__(
         self,
         sample_rate: int = 15950,
@@ -68,12 +145,8 @@ class JittableWaveformtoTensor(nn.Module):
         win_length: int = 1024,
         hop_length: int = 256,
         n_mels: int = 128,
+        validate_target: Tuple[int] = (1, 128, 624),
     ):
-        """
-        Jittable class for onnx export. Zero centers and normalizes, resamples, and
-        returns mel spectrogram.
-        Does NOT trim length or standardize outputs.
-        """
         super().__init__()
         self.sample_rate = sample_rate
         self.seconds = seconds
@@ -81,14 +154,17 @@ class JittableWaveformtoTensor(nn.Module):
         self.win_length = win_length
         self.hop_length = hop_length
         self.n_mels = n_mels
-
+        self.validate_target = validate_target
+        self.input_sample = torch.randn(
+            (1, int(self.seconds * self.sample_rate)), dtype=torch.float32
+        )
         self.mel_spectogram = nn.Sequential(
             torchlibrosa.Spectrogram(
                 n_fft=self.win_length,
                 hop_length=self.hop_length,
                 win_length=self.win_length,
             ),
-            JittableLogmelFilterBank(
+            torchlibrosa.LogmelFilterBank(
                 sr=self.sample_rate,
                 n_fft=self.win_length,
                 n_mels=self.n_mels,
@@ -96,16 +172,18 @@ class JittableWaveformtoTensor(nn.Module):
         )
 
     def forward(self, waveform):
-        # Input shape (n_channels, time)
-        # Zero center and normalize to [-1, 1] to match torchaudio.load()
-        waveform = waveform.sub(waveform.mean())
-        waveform = waveform.div(waveform.abs().max())
-        waveform = waveform.mean(dim=0, keepdims=True)
-        sgram = self.mel_spectogram(waveform)
-        return sgram.transpose(2, 3).squeeze(0)
+        sgram = self.mel_spectogram(waveform).squeeze(0).transpose(1, 2)
+        return sgram
 
 
-class SoundtoTensor(object):
+class DoubleSqueeze(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, input):
+        return input.squeeze().squeeze()
+
+class WaveformToDBSpectrogram(nn.Module):
     def __init__(
         self,
         sample_rate: int = 15950,
@@ -121,6 +199,7 @@ class SoundtoTensor(object):
         output tensor does not match. Spectrograms are NOT standardized for friendlier gradients;
         this should be done by the relevant dataset class or inference code.
         """
+        super().__init__()
         self.sample_rate = sample_rate
         self.seconds = seconds
         self.min_samples = int(sample_rate * seconds)
@@ -128,28 +207,45 @@ class SoundtoTensor(object):
         self.hop_length = hop_length
         self.n_mels = n_mels
         self.validate_target = validate_target
-
+        self.sample_input = torch.randn(
+            (1, int(self.seconds * self.sample_rate)), dtype=torch.float32
+        )
         self.mel_spectogram = nn.Sequential(
             torchlibrosa.Spectrogram(
                 n_fft=self.win_length,
                 hop_length=self.hop_length,
                 win_length=self.win_length,
             ),
+            # Because tf.js reduces dims on BMM (the last op from spectrogram),
+            # the next line would fail in the tf.js model unless we explicitly
+            # squeeze here, so the shapes line up between pytorch, tf, and tf.js.
+            # Without this, tf.js will error on the next op, because it expects
+            # 4 input dims but only has two as a result of its BMM behavior.
+            # We could maybe get around this by performing an explicit BMM in
+            # spectrogram; right now, it relies on pytorch's broadcasting semantics,
+            # (i.e., matmul becomes batch matmul implicitly), and I think this is
+            # what gets lost in translation.
+            DoubleSqueeze(),
             torchlibrosa.LogmelFilterBank(
                 sr=self.sample_rate,
                 n_fft=self.win_length,
                 n_mels=self.n_mels,
+                fmin=40,
+                fmax=(self.sample_rate // 2) + 40,
+                is_log=False,
             ),
         )
 
-        # self.mel_spectogram = MelSpectrogram(
-        #     sample_rate=self.sample_rate,
-        #     win_length=self.win_length,
-        #     hop_length=self.hop_length,
-        #     n_fft=self.win_length,
-        #     n_mels=self.n_mels,
-        # )
-        # self.amplitude_to_db = AmplitudeToDB(top_db=80)
+    def forward(self, waveform: torch.Tensor):
+        """
+        Input: (1, self.sample_rate * self.seconds)
+        Output: self.validate_target
+        This is intended mainly for use in the frontend through export to tf.js 
+        """
+        sgram = self.mel_spectogram(waveform)
+        return torch.log(torch.clamp(sgram, min=1e-10)).div(
+            torch.log(torch.tensor(10.0))
+        )
 
     def get_mfcc(self, waveform: torch.Tensor):
         melkwargs = {
@@ -163,26 +259,18 @@ class SoundtoTensor(object):
         stds = coefs.std(dim=2)
         return torch.cat((means, stds), dim=1)
 
-    def __call__(self, paths: Iterable[str], return_mfcc=False):
-        for path in paths:
-            logger.info(f"Processing {path} to tensor of spectrogram")
-            waveform, inp_freq = torchaudio.load(path)
-            waveform = waveform.mean(dim=0, keepdims=True)
-            waveform = Resample(inp_freq, self.sample_rate)(waveform)
-            n_samples = waveform.shape[1]
-            if n_samples < self.min_samples:
-                raise AudioTooShortError("Input must be at least 10 seconds long")
-            start_idx = torch.randint(0, n_samples - self.min_samples, (1,))
-            waveform = waveform[:, start_idx : (start_idx + self.min_samples)]
-            if return_mfcc:
-                mfcc = self.get_mfcc(waveform)
-            sgram = self.mel_spectogram(waveform).squeeze(0).transpose(1, 2)
-            # sgram = self.amplitude_to_db(sgram)
-            if self.validate_target and sgram.shape != self.validate_target:
-                raise ValueError(
-                    f"Out tensor of {sgram.shape} does not match target of {self.validate_target}"
-                )
-            if return_mfcc:
-                yield sgram, mfcc
-            else:
-                yield sgram
+    def from_path(self, path: Iterable[str], return_mfcc=False):
+        logger.info(f"Processing {path} to tensor of spectrogram")
+        waveform, inp_freq = torchaudio.load(path)
+        waveform = waveform.mean(dim=0, keepdims=True)
+        waveform = Resample(inp_freq, self.sample_rate)(waveform)
+        n_samples = waveform.shape[1]
+        if n_samples < self.min_samples:
+            raise AudioTooShortError(f"Input must be at least {self.seconds} seconds long")
+        start_idx = torch.randint(0, n_samples - self.min_samples, (1,))
+        waveform = waveform[:, start_idx : (start_idx + self.min_samples)]
+        sgram = self.forward(waveform)
+        if return_mfcc:
+            return sgram, self.get_mfcc(waveform)
+        else:
+            return self.forward(waveform)
