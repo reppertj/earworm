@@ -5,9 +5,10 @@ from src.modules.convolution import make_conv, HardSwish  # type: ignore
 
 
 class MobileNetLikeEncoder(nn.Module):
-    def __init__(self, latent_size: int = 60):
+    def __init__(self, latent_size: int = 32):
         super().__init__()
         self.latent_size = latent_size
+        self.sample_input = torch.randn((1, 1, 128, 624), dtype=torch.float32)
         # first layer
         self.layers = [
             make_conv(

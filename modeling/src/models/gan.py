@@ -5,11 +5,11 @@ import torch.nn.functional as F
 from warnings import warn
 import pytorch_lightning as pl
 from src.models.encoder import MobileNetLikeEncoder  # type: ignore
-from src.models.generator import SuperResolutionGenerator  # type: ignore
+from src.models.generator import DCGANLikeGenerator  # type: ignore
 from src.models.discriminator import MulticlassDiscriminator  # type: ignore
 
 
-DEFAULT_HPARAMS = {"latent_size": 60, "dropout": 0.5, "lr": 3e-4}
+DEFAULT_HPARAMS = {"latent_size": 32, "dropout": 0.5, "lr": 3e-4}
 
 
 class MusicGALI(pl.LightningModule):
@@ -22,14 +22,14 @@ class MusicGALI(pl.LightningModule):
         self.lr = hparams["lr"]
 
         self.spectrogram_shape = (1, 128, 624)
-        self.encoder = MobileNetLikeEncoder(latent_size=self.latent_size)
-        self.generator = SuperResolutionGenerator(latent_size=self.latent_size)
+        self.encoder = MobileNetLikeEncoder(latent_size=self.latent_size * 2)
+        self.generator = DCGANLikeGenerator(latent_size=self.latent_size)
         self.discriminator = MulticlassDiscriminator(
             n_classes=4, latent_size=self.latent_size, dropout_prob=self.dropout
         )
 
     def forward(self, x):
-        warn("Forward called on MusicGALI. Model not intended for inference.")
+        warn("Forward called on MusicGALI. Returning identity.")
         return x
 
     def product_of_terms_loss(self, log_probs: torch.Tensor, true_idx: int):
@@ -42,6 +42,24 @@ class MusicGALI(pl.LightningModule):
         return neg_log_probs[:, :true_idx].sum(dim=1) + neg_log_probs[
             :, (true_idx + 1) :
         ].sum(dim=1)
+        
+    def sample(self, mu: torch.Tensor, log_var: torch.Tensor):
+        """Use the reparameterization trick to separate the source of randomness
+        from the latent variables, to allow efficient backprop through random
+        samples from the latent embeddings.
+        See Domoulin, et al., "Adversarially Learned Inference"
+        https://arxiv.org/pdf/1606.00704.pdf
+
+        Arguments:
+            mu {torch.Tensor} -- mean from the encoder's latent space (batch_size, latent_dim)
+            log_var {torch.Tensor} -- log variance from the encoder's latent space (batch_size, latent_dim)
+
+        Returns:
+            torch.tensor -- random samples in the latent space
+        """
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + (eps * std)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         sgrams, _ = batch
@@ -59,8 +77,11 @@ class MusicGALI(pl.LightningModule):
         """
         logits = [None] * 4
         # Class 0:
-        true_latent = self.encoder(sgrams)
-        logits[0] = self.discriminator((sgrams, true_latent))
+        true_latent_params = self.encoder(sgrams).view(-1, 2, self.latent_size)
+        true_mu = true_latent_params[:, 0, :]
+        true_std = true_latent_params[:, 1, :]
+        true_latent_sample = self.sample(true_mu, true_std)
+        logits[0] = self.discriminator((sgrams, true_latent_sample))
         if optimizer_idx == 0:
             log_probs = F.log_softmax(logits[0], dim=1)
             pt_loss = self.product_of_terms_loss(log_probs, 0)
@@ -74,14 +95,21 @@ class MusicGALI(pl.LightningModule):
             pt_loss += self.product_of_terms_loss(log_probs, 1)
 
         # Class 2:
-        true_reencoded_latent = self.encoder(self.generator(true_latent))
-        logits[2] = self.discriminator((sgrams, true_reencoded_latent))
+        true_reencoded_params = self.encoder(self.generator(true_latent_sample)).view(-1, 2, self.latent_size)
+        true_reencoded_mu = true_reencoded_params[:, 0, :]
+        true_reencoded_std = true_reencoded_params[:, 1, :]
+        true_reencoded_latent_sample = self.sample(true_reencoded_mu, true_reencoded_std)
+        logits[2] = self.discriminator((sgrams, true_reencoded_latent_sample))
         if optimizer_idx == 0:
             log_probs = F.log_softmax(logits[2], dim=1)
             pt_loss += self.product_of_terms_loss(log_probs, 2)
 
         # Class 3:
-        fake_regenerated_sgrams = self.generator(self.encoder(fake_sgrams))
+        fake_reencoded_params = self.encoder(fake_sgrams).view(-1, 2, self.latent_size)
+        fake_reencoded_mu = fake_reencoded_params[:, 0, :]
+        fake_reencoded_std = fake_reencoded_params[:, 1, :]
+        fake_reencoded_latent_sample = self.sample(fake_reencoded_mu, fake_reencoded_std)
+        fake_regenerated_sgrams = self.generator(fake_reencoded_latent_sample)
         logits[3] = self.discriminator((fake_regenerated_sgrams, fake_latent))
         if optimizer_idx == 0:
             log_probs = F.log_softmax(logits[3], dim=1)

@@ -4,10 +4,10 @@ import torch
 from torch import nn
 
 
-class SuperResolutionGenerator(nn.Module):
-    def __init__(self, latent_size: int = 60):
+class DCGANLikeGenerator(nn.Module):
+    def __init__(self, latent_size: int = 32):
         super().__init__()
-        feature_depth = 64  # Results in (512, 752) output
+        feature_depth = 64  # Results in (128, 624) output
         self.channels_out = 1
         self.latent_size = latent_size
         self.layers = [
