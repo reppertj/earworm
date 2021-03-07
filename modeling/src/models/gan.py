@@ -4,29 +4,43 @@ import torch.nn.functional as F
 
 from warnings import warn
 import pytorch_lightning as pl
+from torch.utils.data import dataloader
 from src.models.encoder import MobileNetLikeEncoder  # type: ignore
 from src.models.generator import DCGANLikeGenerator  # type: ignore
 from src.models.discriminator import MulticlassDiscriminator  # type: ignore
+from src.data.dataset import SgramDataModule  # type: ignore
 
 
-DEFAULT_HPARAMS = {"latent_size": 32, "dropout": 0.5, "lr": 3e-4}
+DEFAULT_HPARAMS = {
+    "latent_size": 32,
+    "dropout": 0.5,
+    "lr": 3e-4,
+    "b1": 0.9,
+    "b2": 0.999,
+    "noise_variance": 0.2,
+    "noise_decay_C": -5.0,
+    "label_smoothing_epsilon": 0.1,
+}
 
 
 class MusicGALI(pl.LightningModule):
-    def __init__(self, hparams: dict = DEFAULT_HPARAMS) -> None:
+    def __init__(
+        self, datamodule: SgramDataModule, hparams: dict = DEFAULT_HPARAMS
+    ) -> None:
         super().__init__()
         self.hparams = hparams
+        self.datamodule = datamodule
+        self.weight_decay_steps = 0
 
-        self.latent_size = hparams["latent_size"]
-        self.dropout = hparams["dropout"]
-        self.lr = hparams["lr"]
-
-        self.spectrogram_shape = (1, 128, 624)
-        self.encoder = MobileNetLikeEncoder(latent_size=self.latent_size * 2)
-        self.generator = DCGANLikeGenerator(latent_size=self.latent_size)
+        self.spectrogram_shape = (1, 128, 624)  # (channels, height, width)
+        self.encoder = MobileNetLikeEncoder(latent_size=self.hparams.latent_size * 2)
+        self.generator = DCGANLikeGenerator(latent_size=self.hparams.latent_size)
         self.discriminator = MulticlassDiscriminator(
-            n_classes=4, latent_size=self.latent_size, dropout_prob=self.dropout
+            n_classes=4,
+            latent_size=self.hparams.latent_size,
+            dropout_prob=self.hparams.dropout,
         )
+        self.train_dataloader()
 
     def forward(self, x):
         warn("Forward called on MusicGALI. Returning identity.")
@@ -42,7 +56,7 @@ class MusicGALI(pl.LightningModule):
         return neg_log_probs[:, :true_idx].sum(dim=1) + neg_log_probs[
             :, (true_idx + 1) :
         ].sum(dim=1)
-        
+
     def sample(self, mu: torch.Tensor, log_var: torch.Tensor):
         """Use the reparameterization trick to separate the source of randomness
         from the latent variables, to allow efficient backprop through random
@@ -51,8 +65,8 @@ class MusicGALI(pl.LightningModule):
         https://arxiv.org/pdf/1606.00704.pdf
 
         Arguments:
-            mu {torch.Tensor} -- mean from the encoder's latent space (batch_size, latent_dim)
-            log_var {torch.Tensor} -- log variance from the encoder's latent space (batch_size, latent_dim)
+            mu {torch.Tensor} -- means from the encoder's latent space (batch_size, latent_dim)
+            log_var {torch.Tensor} -- log variances from the encoder's latent space (batch_size, latent_dim)
 
         Returns:
             torch.tensor -- random samples in the latent space
@@ -61,8 +75,26 @@ class MusicGALI(pl.LightningModule):
         eps = torch.randn_like(std)
         return mu + (eps * std)
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        sgrams, _ = batch
+    def add_gaussian_noise(self, sgram: torch.Tensor):
+        noise = torch.rand_like(sgram) * (self.hparams.noise_variance ** (0.5))
+        noise = noise.mul(
+            torch.exp(
+                torch.tensor(self.weight_decay_steps / self.hparams.noise_decay_C)
+            )
+        )
+        if self.training:
+            self.weight_decay_steps += 1
+        return sgram.add(noise)
+
+    def smoothing_cross_entropy_loss(self, log_probs, y):
+        num_classes = 4
+        eps = self.hparams.label_smoothing_epsilon
+        assert log_probs.shape[1] == 4
+        loss = -log_probs.sum(dim=1) / num_classes
+        nll = F.nll_loss(log_probs, y, reduction="none")
+        return (eps * loss) + (1 - eps) * nll
+
+    def training_step(self, sgrams, batch_idx, optimizer_idx):
         batch_size = sgrams.shape[0]
         assert sgrams.shape[1:] == self.spectrogram_shape
 
@@ -75,53 +107,126 @@ class MusicGALI(pl.LightningModule):
         2: x, E(G(E(x)))
         3: G(E(G(z))), z
         """
-        logits = [None] * 4
+        log_probs = [None] * 4
         # Class 0:
-        true_latent_params = self.encoder(sgrams).view(-1, 2, self.latent_size)
+        true_latent_params = self.encoder(sgrams).view(-1, 2, self.hparams.latent_size)
         true_mu = true_latent_params[:, 0, :]
         true_std = true_latent_params[:, 1, :]
         true_latent_sample = self.sample(true_mu, true_std)
-        logits[0] = self.discriminator((sgrams, true_latent_sample))
+        logits = self.discriminator((sgrams, true_latent_sample))
+        log_probs[0] = F.log_softmax(logits, dim=1)
         if optimizer_idx == 0:
-            log_probs = F.log_softmax(logits[0], dim=1)
-            pt_loss = self.product_of_terms_loss(log_probs, 0)
+            pt_loss = self.product_of_terms_loss(log_probs[0], 0)
 
         # Class 1:
-        fake_latent = torch.randn(batch_size, self.latent_size, device=self.device)
+        fake_latent = torch.randn(
+            batch_size, self.hparams.latent_size, device=self.device
+        )
         fake_sgrams = self.generator(fake_latent)
-        logits[1] = self.discriminator((fake_sgrams, fake_latent))
+        logits = self.discriminator((fake_sgrams, fake_latent))
+        log_probs[1] = F.log_softmax(logits, dim=1)
         if optimizer_idx == 0:
-            log_probs = F.log_softmax(logits[1], dim=1)
-            pt_loss += self.product_of_terms_loss(log_probs, 1)
+            pt_loss += self.product_of_terms_loss(log_probs[1], 1)
 
         # Class 2:
-        true_reencoded_params = self.encoder(self.generator(true_latent_sample)).view(-1, 2, self.latent_size)
+        true_reencoded_params = self.encoder(self.generator(true_latent_sample)).view(
+            -1, 2, self.hparams.latent_size
+        )
         true_reencoded_mu = true_reencoded_params[:, 0, :]
         true_reencoded_std = true_reencoded_params[:, 1, :]
-        true_reencoded_latent_sample = self.sample(true_reencoded_mu, true_reencoded_std)
-        logits[2] = self.discriminator((sgrams, true_reencoded_latent_sample))
+        true_reencoded_latent_sample = self.sample(
+            true_reencoded_mu, true_reencoded_std
+        )
+        logits = self.discriminator((sgrams, true_reencoded_latent_sample))
+        log_probs[2] = F.log_softmax(logits, dim=1)
         if optimizer_idx == 0:
-            log_probs = F.log_softmax(logits[2], dim=1)
-            pt_loss += self.product_of_terms_loss(log_probs, 2)
+            pt_loss += self.product_of_terms_loss(log_probs[2], 2)
 
         # Class 3:
-        fake_reencoded_params = self.encoder(fake_sgrams).view(-1, 2, self.latent_size)
+        fake_reencoded_params = self.encoder(fake_sgrams).view(
+            -1, 2, self.hparams.latent_size
+        )
         fake_reencoded_mu = fake_reencoded_params[:, 0, :]
         fake_reencoded_std = fake_reencoded_params[:, 1, :]
-        fake_reencoded_latent_sample = self.sample(fake_reencoded_mu, fake_reencoded_std)
+        fake_reencoded_latent_sample = self.sample(
+            fake_reencoded_mu, fake_reencoded_std
+        )
         fake_regenerated_sgrams = self.generator(fake_reencoded_latent_sample)
-        logits[3] = self.discriminator((fake_regenerated_sgrams, fake_latent))
+        logits = self.discriminator((fake_regenerated_sgrams, fake_latent))
+        log_probs[3] = F.log_softmax(logits, dim=1)
+        # Encoder-Generator loss
+
         if optimizer_idx == 0:
-            log_probs = F.log_softmax(logits[3], dim=1)
-            pt_loss += self.product_of_terms_loss(log_probs, 3)
+            pt_loss += self.product_of_terms_loss(log_probs[3], 3)
 
-            return pt_loss.mean()  # Reduce across batch dimension
 
+        last_update = "D" if optimizer_idx == 0 else "EG"
+        step_type = "t" if self.training else "v"
+        self.log(f"x,E(x)|{step_type}|{last_update}", torch.exp(log_probs[0][:, 0]).mean())
+        self.log(f"z,G(z)|{step_type}|{last_update}", torch.exp(log_probs[1][:, 1]).mean())
+        self.log(f"x,E(G(E(x)))|{step_type}|{last_update}", torch.exp(log_probs[2][:, 2]).mean())
+        self.log(f"G(E(G(z))),z|{step_type}|{last_update}", torch.exp(log_probs[3][:, 3]).mean())
+
+        # Discriminator loss
+        
+        if optimizer_idx == 0:
+            # Weight the objective containing m=4 log terms by 2/m=0.5, corresponding to a weight
+            # of 1 for ALI's generator and discriminator objective, keeping the objectives
+            # in a similar range for both optimizers
+            pt_loss = pt_loss.mean() / 2
+            self.log("eg_loss", pt_loss)
+            return pt_loss
+        
         if optimizer_idx == 1:
-            d_loss = torch.zeros((batch_size,), dtype=logits[0].dtype, device=self.device)
+            d_loss = torch.zeros(
+                (batch_size,), dtype=log_probs[0].dtype, device=self.device
+            )
             for true_idx in range(4):
                 target = torch.full(
                     (batch_size,), true_idx, dtype=torch.long, device=self.device
                 )
-                d_loss += F.cross_entropy(logits[true_idx], target, reduction="none")
+                # Maybe randomly swap labels instead
+                d_loss += self.smoothing_cross_entropy_loss(log_probs[true_idx], target)
+                # d_loss += F.cross_entropy(logits[true_idx], target, reduction="none")
+            
+            d_loss = d_loss.mean()
+            self.log("d_loss", d_loss)
             return d_loss.mean()  # Reduce across batch dimension
+
+    # def validation_step(self, *args, **kwargs):
+    #     return self.training_step(*args, **kwargs)
+
+    # def test_step(self, *args, **kwargs):
+    #     return self.training_step(*args, **kwargs)
+
+    def on_epoch_end(self) -> None:
+        # TODO: Validation MSE or similar
+        return super().on_epoch_end()
+
+    def configure_optimizers(self):
+        lr = self.hparams.lr
+        b1 = self.hparams.b1
+        b2 = self.hparams.b2
+
+        encoder_generator_params = list(self.encoder.parameters()) + list(
+            self.generator.parameters()
+        )
+        opt_pt = torch.optim.Adam(encoder_generator_params, lr=lr, betas=(b1, b2))
+        opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr, betas=(b1, b2))
+
+        eg_sched = {
+            "scheduler": torch.optim.lr_scheduler.ExponentialLR(opt_pt, 0.99),
+            "interval": "step",
+        }
+        d_sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt_d, T_max=10)
+
+        return [opt_pt, opt_d], [eg_sched, d_sched]
+
+    def train_dataloader(self, *args, **kwargs) -> dataloader:
+        return self.datamodule.train_dataloader(*args, **kwargs)
+
+    def val_dataloader(self, *args, **kwargs) -> dataloader:
+        return self.datamodule.val_dataloader(*args, **kwargs)
+
+    def test_dataloader(self, *args, **kwargs) -> dataloader:
+        return self.datamodule.train_dataloader(*args, **kwargs)
