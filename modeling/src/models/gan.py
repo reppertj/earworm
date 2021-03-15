@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from warnings import warn
 import pytorch_lightning as pl
+from pytorch_lightning.metrics.functional import mean_squared_error, ssim
 from torch.utils.data import dataloader
 from src.models.encoder import MobileNetLikeEncoder  # type: ignore
 from src.models.generator import DCGANLikeGenerator  # type: ignore
@@ -12,7 +13,7 @@ from src.data.dataset import SgramDataModule  # type: ignore
 
 
 DEFAULT_HPARAMS = {
-    "latent_size": 32,
+    "latent_size": 64,
     "dropout": 0.5,
     "lr": 3e-4,
     "b1": 0.9,
@@ -43,17 +44,19 @@ class MusicGALI(pl.LightningModule):
         self.train_dataloader()
 
     def forward(self, x):
-        warn("Forward called on MusicGALI. Returning identity.")
-        return x
+        latent_params = self.encoder(x).view(-1, 2, self.hparams.latent_size)
+        mu = latent_params[:, 0, :]
+        std = latent_params[:, 1, :]
+        latent_sample = self.sample(mu, std)
+        generated = self.generator(latent_sample)        
+        return latent_sample, generated
 
     def product_of_terms_loss(self, log_probs: torch.Tensor, true_idx: int):
         """
         Computes partial product of terms loss for a single position.
         Does not perform a reduction (i.e., returns tensor of (batch_size,))
-        Product is negated for minimization objective.
         """
-        neg_log_probs = log_probs.mul(-1)
-        return neg_log_probs[:, :true_idx].sum(dim=1) + neg_log_probs[
+        return log_probs[:, :true_idx].sum(dim=1) + log_probs[
             :, (true_idx + 1) :
         ].sum(dim=1)
 
@@ -87,16 +90,25 @@ class MusicGALI(pl.LightningModule):
         return sgram.add(noise)
 
     def smoothing_cross_entropy_loss(self, log_probs, y):
-        num_classes = 4
-        eps = self.hparams.label_smoothing_epsilon
-        assert log_probs.shape[1] == 4
+        """Cross entropy loss with true label sampled
+        between 0.7-1.2 as a hack to improve stability
+
+        Arguments:
+            log_probs {torch.Tensor} -- (batch_size, n_classes)
+            y {torch.Tensor} -- (batch_size,)
+
+        Returns:
+            loss -- loss with true labels changed 0.7-1.2
+        """
+        num_classes = log_probs.shape[-1]
+        eps = torch.rand(1, device=self.device) * (0.5) - 0.2  # Sample true prob (0.7-1.2)
         loss = -log_probs.sum(dim=1) / num_classes
         nll = F.nll_loss(log_probs, y, reduction="none")
         return (eps * loss) + (1 - eps) * nll
 
     def training_step(self, sgrams, batch_idx, optimizer_idx):
         batch_size = sgrams.shape[0]
-        assert sgrams.shape[1:] == self.spectrogram_shape
+        assert sgrams.shape[1:] == self.spectrogram_shape  # (N, 1, H, W)
 
         """
         Four classes with product of terms objective.
@@ -152,6 +164,8 @@ class MusicGALI(pl.LightningModule):
             fake_reencoded_mu, fake_reencoded_std
         )
         fake_regenerated_sgrams = self.generator(fake_reencoded_latent_sample)
+        self.log("reconstruction-mse", mean_squared_error(fake_regenerated_sgrams, sgrams))
+        self.log("reconstruction-ssim", ssim(fake_regenerated_sgrams, sgrams))
         logits = self.discriminator((fake_regenerated_sgrams, fake_latent))
         log_probs[3] = F.log_softmax(logits, dim=1)
         # Encoder-Generator loss
@@ -167,7 +181,6 @@ class MusicGALI(pl.LightningModule):
         self.log(f"x,E(G(E(x)))|{step_type}|{last_update}", torch.exp(log_probs[2][:, 2]).mean())
         self.log(f"G(E(G(z))),z|{step_type}|{last_update}", torch.exp(log_probs[3][:, 3]).mean())
 
-        # Discriminator loss
         
         if optimizer_idx == 0:
             # Weight the objective containing m=4 log terms by 2/m=0.5, corresponding to a weight
@@ -175,7 +188,9 @@ class MusicGALI(pl.LightningModule):
             # in a similar range for both optimizers
             pt_loss = pt_loss.mean() / 2
             self.log("eg_loss", pt_loss)
-            return pt_loss
+            return pt_loss.mul(torch.tensor(-1, device=self.device))
+
+        # Discriminator loss
         
         if optimizer_idx == 1:
             d_loss = torch.zeros(
@@ -229,4 +244,4 @@ class MusicGALI(pl.LightningModule):
         return self.datamodule.val_dataloader(*args, **kwargs)
 
     def test_dataloader(self, *args, **kwargs) -> dataloader:
-        return self.datamodule.train_dataloader(*args, **kwargs)
+        return self.datamodule.test_dataloader(*args, **kwargs)

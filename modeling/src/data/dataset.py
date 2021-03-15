@@ -1,18 +1,17 @@
 import os
+from typing import List, Tuple, Union
 
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
-from torchvision.transforms import Compose  # type: ignore
 import torch
+from numpy.random import PCG64, SeedSequence
 from sklearn.model_selection import train_test_split
-from src.data.preprocessing import TensorPreprocesser  # type: ignore
 from src.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST  # type: ignore
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
+from torchvision.transforms import Compose  # type: ignore
 
-import numpy as np
-
-# handle pytorch tensors etc, by using tensorboardX's method
 try:
     from tensorboardX.x2num import make_np  # type: ignore
 except ImportError:
@@ -25,7 +24,25 @@ MEANS = torch.tensor(MEANS_LIST)
 STDS = torch.tensor(STDS_LIST)
 
 
+class MELNormalize(nn.Module):
+    def __init__(self, mus: torch.Tensor = MEANS, stds: torch.Tensor = STDS):
+        """Normalizes by mel band (i.e., along the H dimesion)
+        of a mel spectrogram.
+
+        Arguments:
+            mus {torch.Tensor} -- tensor of means per mel band
+            stds {torch.Tensor} -- tensor of stds per mel band
+        """
+        super().__init__()
+        self.mus = mus
+        self.stds = stds
+
+    def forward(self, sgrams: torch.Tensor):
+        return sgrams.transpose(-1, -2).sub(self.mus).div(self.stds).transpose(-1, -2)
+
+
 def prepare_tensors_from_data(
+    model: nn.Module,
     in_dir: str,
     file_txt: str,
     out_dir: str,
@@ -34,12 +51,14 @@ def prepare_tensors_from_data(
     fail_file="failures.txt",
     suffix=".pt",
 ):
+    from src.data.preprocessing import TensorPreprocesser  # type: ignore
+
     """Output paths will mirror input paths"""
     with open(file_txt, "r") as listing_file:
         in_paths_short = listing_file.readlines()
     in_paths = list(map(lambda p: os.path.join(in_dir, p.strip()), in_paths_short))
     out_paths = map(lambda p: os.path.join(out_dir, p.strip() + suffix), in_paths_short)
-    processer = TensorPreprocesser()
+    processer = TensorPreprocesser(model, return_two=True)
     successes, failures = processer(in_paths, out_paths, n_workers=n_workers)
     with open(suc_file, "w") as out_file:
         out_file.writelines([p + "\n" for p in successes])
@@ -54,6 +73,175 @@ def tensor_files_in_dir(directory: str):
             if f[-3:] == ".pt":
                 result.append(os.path.join(root, f))
     return result
+
+
+class TripletDataset(Dataset):
+    def __init__(self, df, split, transform, val_size, test_size, random_state):
+        """
+        df should have columns 'path' and 'label_n'
+        """
+        super().__init__()
+        self.df = df
+        self.label_map = (
+            self.df[["label_n", "label"]].set_index("label_n").to_dict()["label"]
+        )
+        self.split = split
+        self.transform = transform
+        self.val_size = val_size
+        self.test_size = test_size
+        self.random_state = random_state
+        self.bg = np.random.default_rng(random_state)
+        self.subset()
+
+    def subset(self):
+        idxs = np.arange(len(self.df))
+        train, test = train_test_split(
+            idxs, test_size=self.test_size, random_state=self.random_state
+        )
+        train, val = train_test_split(
+            train, test_size=self.val_size, random_state=self.random_state
+        )
+        if self.split == "train":
+            self.idxs = train
+        elif self.split == "val":
+            self.idxs = val
+        elif self.split == "test":
+            self.idxs = test
+
+    def __len__(self):
+        return self.idxs.shape[0]
+
+    def __getitem__(
+        self, idx: Union[torch.Tensor, int]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if torch.is_tensor(idx):
+            idx = idx.item()  # type: ignore
+
+        item = self.df.iloc[self.idxs[idx]]
+        left, right = torch.load(item.path)
+        label = torch.tensor(item.label_n, dtype=torch.long)  # type: ignore
+
+        if self.transform:
+            with torch.no_grad():
+                left = self.transform(left)
+                right = self.transform(right)
+
+        if self.split == "train":
+            selector = self.bg.integers(2)
+        else:
+            selector = 0
+        stacked = torch.stack(((left, right)[selector], (left, right)[1 - selector]))
+
+        return ((left, right)[selector].unsqueeze(0), label, stacked.unsqueeze(1))
+
+
+class ConcatDataset(Dataset):
+    def __init__(self, *datasets):
+        self.datasets = datasets
+
+    def __getitem__(self, i):
+        return tuple(d[i] for d in self.datasets)
+
+    def __len__(self):
+        return min(len(d) for d in self.datasets)
+
+
+class ConditionalTripletDatamodule(pl.LightningDataModule):
+    def __init__(
+        self,
+        category_csvs: List[str],
+        dataset_dir: str,
+        batch_size=128,  # TODO: Change defaults outside dev set
+        test_size=1024,
+        val_size=1024,
+        transforms=MELNormalize,
+        random_state=42,
+        num_workers=2,
+        pin_memory=True,
+    ):
+        """Primary entry point to create train/validate dataloaders for multi-category datasets.
+
+        Arguments:
+            category_dfs {List[pd.DataFrame]} -- one DataFrame per dataset, each with "path" and
+            "label_n" columns.
+        """
+        super().__init__()
+        self.csv_paths = category_csvs
+        self.dataset_dir = dataset_dir
+        self.batch_size = batch_size
+        self.test_size = test_size
+        self.val_size = val_size
+        self.transforms = transforms
+        self.random_state = random_state
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+
+    def setup(self, stage=None):
+        self.transforms = MELNormalize
+        dfs = [pd.read_csv(path) for path in self.csv_paths]
+        for i in range(len(dfs)):
+            dfs[i]["path"] = self.dataset_dir + dfs[i]["path"]
+        self.dfs = dfs
+
+    def train_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+
+        dataset = TripletDataset(
+            self.dfs[dataset_idx],
+            "train",
+            self.transforms(),
+            self.val_size,
+            self.test_size,
+            self.random_state,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            drop_last=True,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
+
+    def val_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+        dataset = TripletDataset(
+            self.dfs[dataset_idx],
+            "val",
+            self.transforms(),
+            self.val_size,
+            self.test_size,
+            self.random_state,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=True,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
+
+    def test_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+        dataset = TripletDataset(
+            self.dfs[dataset_idx],
+            "test",
+            self.transforms(),
+            self.val_size,
+            self.random_state,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=True,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
 
 
 class SgramDataset(Dataset):
@@ -193,21 +381,33 @@ class Transpose(nn.Module):
         return tensor.t()
 
 
-class MELNormalize(nn.Module):
+class InverseMELNormalize(MELNormalize):
     def __init__(self, mus: torch.Tensor = MEANS, stds: torch.Tensor = STDS):
-        """Normalizes by mel band (i.e., along the H dimesion)
-        of a mel spectrogram.
+        """Inverse of MELNormalize
 
-        Arguments:
-            mus {torch.Tensor} -- tensor of means per mel band
-            stds {torch.Tensor} -- tensor of stds per mel band
+        Keyword Arguments:
+            mus {torch.Tensor} -- tensor of means per mel band (default: {MEANS})
+            stds {torch.Tensor} -- tensor of stds per mel band (default: {STDS})
         """
-        super().__init__()
-        self.mus = mus
-        self.stds = stds
+        stds_inv = 1 / (stds + 1e-7)
+        mus_inv = -1 * mus * stds_inv
+        super().__init__(mus=mus_inv, stds=stds_inv)
 
     def forward(self, sgrams: torch.Tensor):
-        return sgrams.transpose(-1, -2).sub(self.mus).div(self.stds).transpose(-1, -2)
+        return super().forward(sgrams.clone())
+
+
+class MinMaxScale(nn.Module):
+    """Scale input to a given range. Input should not be batched."""
+
+    def __init__(self, range=(-1, 1)):
+        super().__init__()
+        self.min = range[0]
+        self.max = range[1]
+
+    def forward(self, sgrams: torch.Tensor):
+        sgrams_std = (sgrams - sgrams.min()) / (sgrams.max() - sgrams.min())
+        return sgrams_std * (self.max - self.min) + self.min
 
 
 class SgramDataModule(pl.LightningDataModule):

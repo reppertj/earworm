@@ -10,8 +10,9 @@ def make_conv(
     kernel_size: int,
     stride: int,
     padding: int,
-    norm_layer: nn.Module = nn.BatchNorm2d,
-    activation_layer: nn.Module = nn.ReLU,
+    norm_layer: nn.Module = nn.BatchNorm2d,  # type: ignore
+    affine: bool=True,
+    activation_layer: nn.Module = nn.ReLU,  # type: ignore
     kaiming_init: bool = True,
 ):
     if transpose:
@@ -24,7 +25,7 @@ def make_conv(
             bias=False,
         )
     else:
-        conv = nn.Conv2d(
+        conv = nn.Conv2d(  # type: ignore
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
@@ -34,7 +35,7 @@ def make_conv(
         )
     if kaiming_init:
         nn.init.kaiming_normal_(conv.weight)
-    return nn.Sequential(conv, norm_layer(out_channels), activation_layer())
+    return nn.Sequential(conv, norm_layer(out_channels, affine=affine), activation_layer())
 
 
 class HardSwish(nn.Module):

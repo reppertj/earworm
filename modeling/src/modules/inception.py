@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 from torch import nn
 import numpy as np
@@ -62,19 +64,21 @@ class ReductionBlock(nn.Module):
     
 
 class ConditionalInceptionLikeEncoder(nn.Module):
-    def __init__(self, latent_dim=256, n_masks=4):
+    def __init__(self, latent_dim=256, n_masks=4, normalize_embeddings=False):
         super().__init__()
         assert latent_dim % n_masks == 0
-        self.sample_input = torch.randn((1, 1, 128, 128))
+        self.normalize_embeddings = normalize_embeddings
+        self.sample_input = torch.randn((1, 1, 128, 130)) 
 
-        self.masks = nn.Embedding(n_masks, latent_dim)
+        self.masks = nn.Embedding(n_masks+1, latent_dim)
         mask_weights = np.zeros([n_masks+1, latent_dim])
         mask_dim = latent_dim // n_masks
         for i in range(n_masks):
             mask_weights[i, i*mask_dim:(i+1)*mask_dim] = 1
-        mask_weights[n_masks] = 1
-        # Don't backprop on the masks
-        self.masks.weight = nn.parameter.Parameter(torch.tensor(mask_weights), requires_grad=False)
+        mask_weights[n_masks] = 1  # i.e., no mask @ masks[n_masks]
+        with torch.no_grad():
+            self.masks.weight[:, :] = torch.from_numpy(mask_weights)
+            self.masks.weight.requires_grad = False
 
         layers = [
             nn.Conv2d(1, 64, 5, stride=1, padding=2),
@@ -93,14 +97,18 @@ class ConditionalInceptionLikeEncoder(nn.Module):
         x = F.avg_pool2d(x, kernel_size=kernel_size).view(batch_size, -1)
         return self.fc(x)
     
-    def forward(self, x: torch.Tensor, condition: torch.Tensor):
-        """Condition should be a scalar tensor between (0, n_masks+1), where 
-        n_masks+1 means no mask (i.e., a mask of all 1s)
+    def forward(self, x: torch.Tensor, condition: Optional[torch.Tensor] = None):
+        """Condition should be a scalar tensor between (0, n_masks), where 
+        n_masks means no mask (i.e., a mask of all 1s)
         """
         batch_size = x.shape[0]
         x = self.fc(self.inception(x).view(batch_size, -1))
-        mask = self.masks(condition)
+        if self.normalize_embeddings:
+            x = F.normalize(x, 2, -1)
+        if condition is None:
+            condition = torch.tensor(4, dtype=torch.long, device=self.masks.weight.device)
+        mask = self.masks(condition.to(self.masks.weight.device))
         masked = x.mul(mask)
-        return x, masked, mask.norm(1), x.norm(2)  # TODO: Big question is whether to normalize embeddings
+        return masked 
         
         

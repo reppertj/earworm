@@ -113,27 +113,31 @@ class AudioTooShortError(ValueError):
 
 
 class TensorPreprocesser:
-    def __init__(self, model) -> None:
+    def __init__(self, model, return_two: bool=False) -> None:
         self.model = model
+        self.return_two = return_two
 
     def __call__(
         self, in_paths: List[str], out_paths: List[str], mfcc=False, n_workers=2
     ) -> Tuple[List[str], List[str]]:
         def write_out(inp, out):
             try:
-                tensor = self.model.from_path(inp, mfcc)
+                if os.path.exists(out):
+                    print("Skipping:", out)
+                    return (out, True)
+                tensors = self.model.from_path(inp, return_two=self.return_two, return_mfcc=mfcc)
                 dir = os.path.dirname(out)
                 if not os.path.exists(dir):
                     os.mkdir(dir)
-                torch.save(tensor, out)
+                torch.save(tensors, out)
                 print("Success:", out)
                 return (out, True)
-            except:
-                print("Failure:", out)
+            except Exception as e:
+                print("Failure:", e, out)
                 return (out, False)
 
         with ThreadPool(nodes=n_workers) as P:
-            results = P.imap(write_out, in_paths, out_paths)
+            results = P.uimap(write_out, in_paths, out_paths)
         successes = [path for path, res in results if res]
         failures = [path for path, res in results if not res]
         return successes, failures
@@ -158,7 +162,7 @@ class WaveformToDBSpectrogram(nn.Module):
         validate_target: Tuple[int, int] = (128, 130),
     ):
         """
-        Returns log10 (not dB) scaled mel spectrograms from random crop of length `seconds` from
+        Returns log10 (dB/10) scaled mel spectrograms from random crop of length `seconds` from
         audio files.
         Output size depends on parameters; pass shape to `validate_target` to raise an error if the
         output tensor does not match. Spectrograms are NOT standardized for friendlier gradients;
@@ -209,9 +213,11 @@ class WaveformToDBSpectrogram(nn.Module):
         This is intended mainly for use in the frontend through export to tf.js
         """
         sgram = self.mel_spectogram(waveform).t()
-        if self.validate_target:
-            assert sgram.shape == self.validate_target
-        log_spec = torch.log(torch.clamp(sgram, min=1e-10)).div(torch.log(torch.tensor(10.)))
+        # if self.validate_target:
+        #     assert sgram.shape == self.validate_target
+        log_spec = torch.log(torch.clamp(sgram, min=1e-10)).div(
+            torch.log(torch.tensor(10.0))
+        )
         return log_spec
         # return torch.log(torch.clamp(sgram, min=1e-10)).div(
         #     torch.log(torch.tensor(10.0))
@@ -230,20 +236,30 @@ class WaveformToDBSpectrogram(nn.Module):
         stds = coefs.std(dim=2)
         return torch.cat((means, stds), dim=1)
 
-    def from_path(self, path: str, return_mfcc=False):
+    def from_path(self, path: str, return_two=False, return_mfcc=False):
         logger.info(f"Processing {path} to tensor of spectrogram")
         waveform, inp_freq = torchaudio.load(path)
         waveform = waveform.mean(dim=0, keepdims=True)
         waveform = Resample(inp_freq, self.sample_rate)(waveform)
         n_samples = waveform.shape[1]
-        if n_samples < self.min_samples:
+        min_samples = self.min_samples * 2 if return_two else self.min_samples
+        if n_samples < min_samples:
             raise AudioTooShortError(
-                f"Input must be at least {self.seconds} seconds long"
+                f"Input must be at least {self.seconds * 2 if return_two else self.seconds} seconds long"
             )
-        start_idx = torch.randint(0, n_samples - self.min_samples, (1,))
-        waveform = waveform[:, start_idx : (start_idx + self.min_samples)]  # type: ignore
-        sgram = self.forward(waveform)
+        first_idx = torch.randint(0, n_samples - min_samples, (1,))
+        first_waveform = waveform[:, first_idx : (first_idx + self.min_samples)]  # type: ignore
+        first_sgram = self.forward(first_waveform)
         if return_mfcc:
-            return sgram, self.get_mfcc(waveform)
-        else:
-            return self.forward(waveform)
+            first_mfcc = self.get_mfcc(first_waveform)
+        if return_two:
+            second_idx = torch.randint(first_idx.item() + self.min_samples, n_samples - self.min_samples, (1,))  # type: ignore
+            second_waveform = waveform[:, second_idx : (second_idx + self.min_samples)]
+            second_sgram = self.forward(second_waveform)
+            if return_mfcc:
+                second_mfcc = self.get_mfcc(second_waveform)
+                return first_sgram, first_mfcc, second_sgram, second_mfcc
+            return first_sgram, second_sgram
+        if return_mfcc:
+            return first_sgram, first_mfcc
+        return first_sgram
