@@ -1,14 +1,10 @@
 import io
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Union, cast
 
 import matplotlib.pyplot as plt
-from PIL import Image
-import wandb
 import numpy as np
 import torch
 import umap
-from cycler import cycler
-from torchvision.transforms import ToPILImage
 
 
 def pairwise_distances(embeddings: torch.Tensor, squared=False) -> torch.Tensor:
@@ -88,3 +84,29 @@ def visualizer_hook(
     if show_plot:
         plt.show()
     return fig
+
+def histogram_from_weights(weights: torch.Tensor, tol: float=1e-4) -> Dict[str, Union[plt.figure, np.array, float]]:
+    """Plot of sparsity structure of weights
+
+    Arguments:
+        tensor {torch.Tensor} -- weights tensor for visualization (latent_dim, n_masks)
+        tol {float} -- how close to zero should be considered zero
+
+    Returns:
+        Dict containing histogram figure, array of values sorted by magnitude, and sparsity
+    """
+    weights_np = cast(np.array, weights.detach().cpu().numpy().T)
+    sort_idx = np.argsort(np.abs(weights_np).sum(axis=0))[::-1]
+    weights_np = weights_np[:, sort_idx]
+    
+    fig, axs = plt.subplots(4)
+    
+    for idx, condition in enumerate(weights_np):
+        axs[idx].hist(np.abs(condition))
+    
+    sparsity = float((np.abs(weights_np) < tol).mean())
+    
+    return {"plot": fig, "weights": weights_np, "sparsity": sparsity}
+        
+    
+
