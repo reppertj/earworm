@@ -105,8 +105,8 @@ class ConditionalInceptionLikeEncoder(nn.Module):
 
         Out:
         embeddings: the masked embedding (batch_size, latent_dim)
-        embeddings_norm: the (unreduced, non-squared) l2 norm of the embeddings (batch_size,)
-        mask_weight_norm: the scalar l1 norm of the masking function's weights
+        embeddings_norm: the mean squared l2 norm of the embeddings
+        mask_weight_norm: the mean l1 norm of the masking function's weights
         """
         batch_size = x.shape[0]
         x = self.fc(self.inception(x).view(batch_size, -1))
@@ -114,6 +114,6 @@ class ConditionalInceptionLikeEncoder(nn.Module):
         embeddings = x.mul(mask)
         if self.normalize_embeddings:
             embeddings = F.normalize(embeddings, 2, -1)
-        embeddings_norm = torch.linalg.norm(x, ord=2, dim=-1)
+        embeddings_norm = torch.linalg.norm(x, ord=2, dim=-1).pow(2).mean()
         mask_weight_norm = torch.linalg.norm(self.masks.weight, ord=1)
         return embeddings, embeddings_norm, mask_weight_norm

@@ -1,5 +1,6 @@
 import sys
 import gc
+from typing import Tuple
 import torch
 from torch import nn
 
@@ -103,5 +104,9 @@ def debug_cuda(func):
         context.__exit__()
         return return_value
     return decorated_func
+
+def delete(*objs):
+    for obj in objs:
+        del obj    
 
 

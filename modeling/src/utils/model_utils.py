@@ -1,10 +1,21 @@
 import io
+import os
+import random
 from typing import Dict, Optional, Union, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import umap
+
+
+def seed_everything(seed: int = 42) -> int:
+    seed = int(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    return seed
 
 
 def pairwise_distances(embeddings: torch.Tensor, squared=False) -> torch.Tensor:
@@ -74,18 +85,27 @@ def visualizer_hook(
     ax = fig.gca()
     ax.axes.xaxis.set_visible(False)
     ax.axes.yaxis.set_visible(False)
-    
+
     ax.set_prop_cycle(color=colors)
     for i, fl in enumerate(friendly_labels):
         idxs = labels == label_types[i]
         ax.plot(x[idxs], y[idxs], ".", markersize=2, label=fl)
-    plt.legend(bbox_to_anchor=(1.01, 1.0), loc="upper left", fontsize="xx-small", frameon=False, labelspacing=0.2)
+    plt.legend(
+        bbox_to_anchor=(1.01, 1.0),
+        loc="upper left",
+        fontsize="xx-small",
+        frameon=False,
+        labelspacing=0.2,
+    )
     plt.tight_layout()
     if show_plot:
         plt.show()
     return fig
 
-def histogram_from_weights(weights: torch.Tensor, tol: float=1e-4) -> Dict[str, Union[plt.figure, np.array, float]]:
+
+def histogram_from_weights(
+    weights: torch.Tensor, tol: float = 1e-4
+) -> Dict[str, Union[plt.figure, np.array, float]]:
     """Plot of sparsity structure of weights
 
     Arguments:
@@ -98,15 +118,24 @@ def histogram_from_weights(weights: torch.Tensor, tol: float=1e-4) -> Dict[str, 
     weights_np = cast(np.array, weights.detach().cpu().numpy().T)
     sort_idx = np.argsort(np.abs(weights_np).sum(axis=0))[::-1]
     weights_np = weights_np[:, sort_idx]
-    
+
     fig, axs = plt.subplots(4)
-    
+
     for idx, condition in enumerate(weights_np):
         axs[idx].hist(np.abs(condition))
-    
-    sparsity = float((np.abs(weights_np) < tol).mean())
-    
-    return {"plot": fig, "weights": weights_np, "sparsity": sparsity}
-        
-    
 
+    sparsity = float((np.abs(weights_np) < tol).mean())
+
+    return {"plot": fig, "weights": weights_np, "sparsity": sparsity}
+
+
+def copy_params(encQ, encK, m=None):
+    """Copy parameters with momentum from query to key models for MoCo implementation
+    """
+    if m is None:
+        for param_q, param_k in zip(encQ.parameters(), encK.parameters()):
+            param_k.data.copy_(param_q.data)  # initialize
+            param_k.requires_grad = False  # don't backprop on keys
+    else:
+        for param_q, param_k in zip(encQ.parameters(), encK.parameters()):
+            param_k.data = param_k.data * m + param_q.data * (1. - m)

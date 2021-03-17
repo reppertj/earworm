@@ -3,19 +3,22 @@ from warnings import filterwarnings
 
 import matplotlib.pyplot as plt
 import pytorch_lightning as pl
-from pytorch_metric_learning.miners.batch_easy_hard_miner import BatchEasyHardMiner
 import torch
 import torch.nn.functional as F
-from pytorch_metric_learning.losses import NTXentLoss
-from pytorch_metric_learning.miners import BatchHardMiner
-from pytorch_metric_learning.testers import GlobalEmbeddingSpaceTester
+from numpy.core.numeric import full
 from pytorch_metric_learning.distances import DotProductSimilarity
+from pytorch_metric_learning.losses import NTXentLoss, ProxyAnchorLoss
+from pytorch_metric_learning.miners import BatchHardMiner
+from pytorch_metric_learning.miners.batch_easy_hard_miner import BatchEasyHardMiner
+from pytorch_metric_learning.testers import GlobalEmbeddingSpaceTester
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
 from src.data.dataset import SgramDataModule  # type: ignore
 from src.modules.inception import ConditionalInceptionLikeEncoder  # type: ignore
+from src.utils.dev_utils import debug_cuda, delete  # Type: ignore
 from src.utils.model_utils import (  # type: ignore
     anchor_negative_triplet_mask,
     anchor_positive_triplet_mask,
+    histogram_from_weights,
     pairwise_distances,
     visualizer_hook,
 )
@@ -23,8 +26,6 @@ from torch import nn
 from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
 from umap import UMAP
-
-from src.utils.dev_utils import debug_cuda  # Type: ignore
 
 filterwarnings("ignore", category=UserWarning)
 
@@ -35,12 +36,13 @@ DEFAULT_HPARAMS = {
     "lr": 0.01,
     "b1": 0.9,
     "b2": 0.99,
-    "npairs_temperature": 0.07,
-    "track_reg": 0.5,
-    "normalize_embeddings": True,
+    "npairs_temperature": 10,
+    "track_reg": 20.,
+    "normalize_embeddings": False,
     "margin": 0.1,
-    "soft": True,
-    "checkpoint_path": "model_checkpoints/{epoch}--{val_loss:.2f}",
+    "embeddings_l2_lambda": 5e-3,
+    "mask_l1_lambda": 5e-4,
+    "checkpoint_path": "model_checkpoints/pretrain--{epoch}--{train_loss}",
 }
 
 
@@ -63,117 +65,223 @@ class MusicInception(pl.LightningModule):
             latent_dim=self.hparams.latent_dim,  # type: ignore
             normalize_embeddings=self.hparams.normalize_embeddings,  # type: ignore
         )
-        self.loss_func = NTXentLoss(temperature=self.hparams.npairs_temperature)  # type: ignore
-        self.miner = BatchHardMiner(distance=DotProductSimilarity(collect_stats=False), collect_stats=False)
-        self.full_miner = BatchEasyHardMiner(
-            pos_strategy="easy",
-            neg_strategy="semihard"
+        self.make_category_losses()
+        self.track_miner = BatchEasyHardMiner(
+            distance=DotProductSimilarity(), pos_strategy="all", neg_strategy="hard"
         )
+        self.track_loss_func = NTXentLoss(distance=DotProductSimilarity(), temperature=self.hparams.npairs_temperature)  # type: ignore
+
         self.tester = GlobalEmbeddingSpaceTester(
             data_and_label_getter=data_and_label_getter,
             dataloader_num_workers=2,
             visualizer=UMAP(),
             visualizer_hook=visualizer_hook,
-            accuracy_calculator=AccuracyCalculator(avg_of_avgs=True),
+            accuracy_calculator=AccuracyCalculator(),
         )
+
+    def make_category_losses(self):
+        for n, loader in enumerate(self.train_dataloader()):
+            setattr(
+                self,
+                f"loss_func_{n}",
+                ProxyAnchorLoss(
+                    num_classes=loader.dataset.n_classes,
+                    embedding_size=self.hparams.latent_dim,
+                    margin=self.hparams.margin,
+                    alpha=32,
+                ),
+            )
 
     def forward(self, x):
         return self.model(x, torch.tensor(4, dtype=torch.long))
 
-    def training_step(self, batch, batch_idx):
-        """Training batch is a 4-tuple of 3-tuples of (sgrams, labels, matched_sgrams), one for
+    def training_step(self, batch, batch_idx, optimizer_idx):
+        """Training batch is a tuple of 3-tuples of (sgrams, labels, matched_sgrams), one for
         each of four similarity conditions
 
         matched_sgrams should be `batch_size, 2, 1, H, W` for Siamese regularization
         """
 
-        opt = self.optimizers()
+        if optimizer_idx == 1:
+            return
+
+        model_opt, loss_opt = self.optimizers()
+
+        model_opt.zero_grad()
+        loss_opt.zero_grad()
 
         full_loss = 0
 
         for condition in range(len(batch)):
-          #  @debug_cuda
+            """ Use a closure to free tensors between conditions """
+            #  @debug_cuda
             def handle_condition():
-                sgrams, labels, matched_sgrams = batch[condition]
-                assert sgrams.shape[1:] == self.spectrogram_shape  # (N, 1, H, W)
-                batch_size = sgrams.shape[0]
+                nonlocal full_loss
+                conditional_sgrams, conditional_labels, track_sgrams = batch[condition]
+                assert (
+                    conditional_sgrams.shape[1:] == self.spectrogram_shape
+                )  # (N, 1, H, W)
+                batch_size = conditional_sgrams.shape[0]
 
-                # Conditional hard triplet loss
-                masked_embeddings = self.model(
-                    sgrams, torch.tensor(condition, dtype=torch.long, requires_grad=False)
+                # Conditional proxy loss
+                conditional_mask_in = torch.zeros(
+                    (batch_size, len(batch)),
+                    dtype=conditional_sgrams.dtype,
+                    device=conditional_sgrams.device,
+                )
+                conditional_mask_in[:, condition] = 1.0
+                conditional_embeddings, embeddings_norm, mask_weight_norm = self.model(
+                    conditional_sgrams, conditional_mask_in
+                )
+                conditional_loss = getattr(self, f"loss_func_{condition}")(
+                    conditional_embeddings, conditional_labels
+                )
+                loss = (
+                    conditional_loss
+                    + self.hparams.embeddings_l2_lambda * embeddings_norm
+                    + self.hparams.mask_l1_lambda * mask_weight_norm
                 )
 
-                hard_triplets = self.miner(masked_embeddings, labels)
-                conditional_loss = self.loss_func(masked_embeddings, labels, hard_triplets)
+                self.manual_backward(loss)
+                self.logger.experiment.log(
+                    {
+                        f"cond_{condition}_loss": conditional_loss,
+                        f"cond_{condition}_embed_l2": embeddings_norm,
+                        f"cond_{condition}_mask_l1": mask_weight_norm,
+                    },
+                )
+                full_loss += loss.item()
+                delete(
+                    loss,
+                    conditional_loss,
+                    conditional_embeddings,
+                    embeddings_norm,
+                    mask_weight_norm,
+                )
 
-                self.manual_backward(conditional_loss)
-
-                # Siamese (track) hard triplet loss
+                # Track loss
                 track_labels = torch.tensor(
-                    list(zip(range(batch_size), range(batch_size))), dtype=labels.dtype, requires_grad=False,
+                    list(zip(range(batch_size), range(batch_size))),
+                    dtype=conditional_labels.dtype,
+                    requires_grad=False,
                 ).flatten()
 
-                CONDITION_FOR_FULL_NORM = 4
+                track_mask_in = torch.full(
+                    (batch_size * 2, len(batch)),
+                    1 / len(batch),
+                    device=track_sgrams.device,
+                    dtype=track_sgrams.dtype,
+                )
+                delete(conditional_mask_in)
 
-                embeddings = self.model(
-                    matched_sgrams.flatten(0, 1),
-                    torch.tensor(CONDITION_FOR_FULL_NORM, dtype=torch.long, requires_grad=False),
+                track_embeddings, embeddings_norm, mask_weight_norm = self.model(
+                    track_sgrams.flatten(0, 1), track_mask_in
                 )
 
-                hard_triplets = self.miner(embeddings, track_labels)
-                track_loss = self.loss_func(embeddings, track_labels, hard_triplets) * (
-                    1 / 4 * self.hparams.track_reg
+                #hard_triplets = self.track_miner(track_embeddings, track_labels)
+                track_loss = self.track_loss_func(
+                    track_embeddings, track_labels#, hard_triplets
+                ) * (self.hparams.track_reg)
+                loss = track_loss + embeddings_norm * self.hparams.embeddings_l2_lambda
+                self.manual_backward(loss)
+                self.logger.experiment.log(
+                    {
+                        f"track_{condition}_loss": track_loss,
+                        f"track_{condition}_l2": embeddings_norm,
+                    }
                 )
-                self.manual_backward(track_loss)
-                self.log(f"{condition}-conditional loss", conditional_loss)
-                self.log(f"{condition}-track loss", track_loss)
+                full_loss += track_loss.item()
 
-                opt.step()
-                opt.zero_grad()
-                
-                return (conditional_loss.detach() + track_loss.detach()).item()
-                
-            full_loss += handle_condition()
+            handle_condition()
+
+        model_opt.step()
+        loss_opt.step()
 
         self.log("train_loss", full_loss, on_step=True, on_epoch=True)
 
-
     def validation_step(self, batch, batch_idx, dataloader_idx):
         with torch.no_grad():
-            sgrams, labels, matched_sgrams = batch
-            batch_size = sgrams.shape[0]
+            full_loss = 0
+            conditional_sgrams, conditional_labels, track_sgrams = batch
+            assert (
+                conditional_sgrams.shape[1:] == self.spectrogram_shape
+            )  # (N, 1, H, W)
+            batch_size = conditional_sgrams.shape[0]
 
-            # Conditional hard triplet loss
-            masked_embeddings = self.model(
-                sgrams,
-                torch.tensor(dataloader_idx, dtype=torch.long, device=self.device),
+            # Conditional proxy loss
+            conditional_mask_in = torch.zeros(
+                (batch_size, 4),
+                dtype=conditional_sgrams.dtype,
+                device=conditional_sgrams.device,
+            )
+            conditional_mask_in[:, dataloader_idx] = 1.0
+            conditional_embeddings, embeddings_norm, mask_weight_norm = self.model(
+                conditional_sgrams, conditional_mask_in
+            )
+            conditional_loss = getattr(self, f"loss_func_{dataloader_idx}")(
+                conditional_embeddings, conditional_labels
+            )
+            loss = (
+                conditional_loss
+                + self.hparams.embeddings_l2_lambda * embeddings_norm
+                + self.hparams.mask_l1_lambda * mask_weight_norm
             )
 
-            hard_triplets = self.miner(masked_embeddings, labels)
-            conditional_loss = self.loss_func(masked_embeddings, labels, hard_triplets)
+            self.logger.experiment.log(
+                {
+                    f"cond_{dataloader_idx}_val_loss": conditional_loss,
+                    f"cond_{dataloader_idx}_val_embed_l2": embeddings_norm,
+                    f"cond_{dataloader_idx}_val_mask_l1": mask_weight_norm,
+                },
+            )
+            full_loss += loss.item()
+            delete(
+                loss,
+                conditional_loss,
+                conditional_embeddings,
+                embeddings_norm,
+                mask_weight_norm,
+            )
 
-            # Siamese (track) hard triplet loss
+            # Track loss
             track_labels = torch.tensor(
-                list(zip(range(batch_size), range(batch_size))), dtype=labels.dtype
+                list(zip(range(batch_size), range(batch_size))),
+                dtype=conditional_labels.dtype,
+                requires_grad=False,
             ).flatten()
 
-            CONDITION_FOR_FULL_NORM = 4
+            track_mask_in = torch.full(
+                (batch_size * 2, 4),
+                1 / 4,
+                device=track_sgrams.device,
+                dtype=track_sgrams.dtype,
+            )
+            delete(conditional_mask_in)
 
-            embeddings = self.model(
-                matched_sgrams.flatten(0, 1),
-                torch.tensor(
-                    CONDITION_FOR_FULL_NORM, dtype=torch.long, device=self.device
-                ),
+            track_embeddings, embeddings_norm, mask_weight_norm = self.model(
+                track_sgrams.flatten(0, 1), track_mask_in
             )
 
-            hard_triplets = self.miner(embeddings, track_labels)
-            track_loss = self.loss_func(embeddings, track_labels, hard_triplets) * (
-                1 / 4
+            hard_triplets = self.track_miner(track_embeddings, track_labels)
+            track_loss = self.track_loss_func(
+                track_embeddings, track_labels, hard_triplets
+            ) * (self.hparams.track_reg)
+            loss = track_loss + embeddings_norm * self.hparams.embeddings_l2_lambda
+            self.log(
+                f"track_{dataloader_idx}_val_loss",
+                track_loss,
+                on_step=True,
+                on_epoch=True,
             )
-            self.log(f"{dataloader_idx}-conditional val loss", conditional_loss)
-            self.log(f"{dataloader_idx}-track val loss", track_loss)
+            self.log(
+                f"track_{dataloader_idx}_val_l2",
+                embeddings_norm,
+                on_step=True,
+                on_epoch=True,
+            )
+            full_loss += track_loss.item()
 
-            self.log("val_loss", conditional_loss + track_loss)
+            self.log("val_loss", full_loss)
 
     def on_validation_end(self, *args, **kwargs) -> None:  # type: ignore
         with torch.no_grad():
@@ -190,7 +298,7 @@ class MusicInception(pl.LightningModule):
                     label,
                     label_map,
                     split_name="val",
-                    show_plot=True,
+                    show_plot=False,
                 )
                 accuracy = self.tester.accuracy_calculator.get_accuracy(
                     embedding,
@@ -200,10 +308,15 @@ class MusicInception(pl.LightningModule):
                     embeddings_come_from_same_source=True,
                 )
                 accuracies.append({k + f"_{category}": v for k, v in accuracy.items()})
-            accuracies = {k: v for dct in accuracies for k, v in dct.items()}  # type ignore
+            accuracies = {
+                k: v for dct in accuracies for k, v in dct.items()
+            }  # type ignore
             if self.logger is not None:
                 self.logger.experiment.log(visualizations)
                 self.logger.experiment.log(accuracies)
+                self.logger.experiment.log(
+                    histogram_from_weights(self.model.masks.weight)
+                )
             self.model.train()
 
     def get_all_embeddings(
@@ -218,9 +331,15 @@ class MusicInception(pl.LightningModule):
         embeddings = []
         labels = []
         label_maps = []
+        batch_size = loaders[0].batch_size
+        mask = torch.full(
+            (batch_size, len(loaders)),
+            1 / len(loaders),
+            device=self.model.masks.weight.device,
+        )
         for loader in loaders:
             embed, lab = self.tester.compute_all_embeddings(
-                loader, lambda x: x, self.model
+                loader, lambda x: x, lambda x: self.model(x, mask)[0]
             )
             embeddings.append(embed)
             labels.append(lab.squeeze().squeeze())
@@ -231,11 +350,27 @@ class MusicInception(pl.LightningModule):
         lr = self.hparams.lr
         b1 = self.hparams.b1
         b2 = self.hparams.b2
-        opt = torch.optim.Adam(self.model.parameters(), lr=lr, betas=(b1, b2))
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            opt, factor=0.2, patience=5, threshold=1e-3, verbose=True
+        model_opt = torch.optim.AdamW(self.model.parameters(), lr=lr, betas=(b1, b2), amsgrad=True)
+        sched = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                model_opt, factor=0.2, patience=5, threshold=1e-3, verbose=True
+            ),
+            "monitor": "train_loss",
+        }
+        loss_params = []
+        for n in range(len(self.train_dataloader())):
+            loss_params += list(getattr(self, f"loss_func_{n}").parameters())
+        loss_opt = torch.optim.SGD(
+            loss_params,
+            lr=self.hparams.lr,
         )
-        return {"optimizer": opt, "lr_scheduler": sched, "monitor": "train_loss"}
+        return [
+            {
+                "optimizer": model_opt,
+                "lr_scheduler": sched,
+            },
+            {"optimizer": loss_opt},
+        ]
 
     def configure_callbacks(self):
         early_stop = pl.callbacks.EarlyStopping("train_loss", patience=6, verbose=True)

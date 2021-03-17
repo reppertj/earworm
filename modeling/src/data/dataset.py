@@ -85,6 +85,7 @@ class TripletDataset(Dataset):
         self.label_map = (
             self.df[["label_n", "label"]].set_index("label_n").to_dict()["label"]
         )
+        self.n_classes = max(self.label_map.keys()) + 1
         self.split = split
         self.transform = transform
         self.val_size = val_size
