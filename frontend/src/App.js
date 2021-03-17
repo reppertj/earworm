@@ -1,11 +1,9 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import axios from "axios";
 import "./App.css";
 import { useDropzone } from "react-dropzone";
 import { resample } from "wave-resampler";
-import ndarray from "ndarray";
 import colormap from "colormap";
-import ops from "ndarray-ops";
 import * as tf from "@tensorflow/tfjs";
 
 function getRandomInt(max) {
@@ -20,12 +18,12 @@ async function resampleAudioBuffer(buffer) {
     buffer.duration * buffer.sampleRate,
     buffer.sampleRate
   );
-  const MIN_LENGTH = 10;
+  const MIN_LENGTH = 3;
   if (buffer.duration < MIN_LENGTH + 1) {
     // Give ourselves a little breathing room
     throw new Error("AudioTooShort");
   }
-  const TARGET_SAMPLE_RATE = 15950;
+  const TARGET_SAMPLE_RATE = 22050;
   const TARGET_SAMPLES = TARGET_SAMPLE_RATE * MIN_LENGTH;
   const start_idx = getRandomInt(
     TARGET_SAMPLE_RATE * buffer.duration - TARGET_SAMPLES
@@ -63,30 +61,40 @@ async function runInference(tensor) {
   // Intended for local dev use only
   const firstUrl = "http://127.0.0.1:8081/waveformSpectrogramModel/model.json";
   const secondUrl =
-    "http://127.0.0.1:8081/SpectrogramEmbeddingModel/model.json";
-  // TODO: Warmup the model separately to make the first prediction faster
+    "http://127.0.0.1:8081/conditionalInceptionEncoder/model.json";
+  // TODO: Warmup the model separately to make the first prediction MUCH faster
   const firstModel = await tf.loadGraphModel(firstUrl);
   const FIRST_SHAPE = [1, 159500];
-  const warmup = await firstModel.executeAsync(
-    { "input:0": tf.zeros(FIRST_SHAPE) },
-    "Identity:0"
-  );
-  tf.dispose(warmup);
-  const sgram = await firstModel.executeAsync(
+  // const warmup = await firstModel.executeAsync(
+  //   { "input:0": tf.zeros(FIRST_SHAPE) },
+  //   "Identity:0"
+  // );
+  // tf.dispose(warmup);
+  const sgramTensor = await firstModel.executeAsync(
     { "input:0": tensor },
     "Identity:0"
-  );
-  // const secondModel = await tf.loadGraphModel(secondUrl)
-  // const SECOND_SHAPE = [1, 1, 128, 624]
+  ); // Right now this is [128, 130]
+  const sgram_reshaped = sgramTensor.expandDims().expandDims(); // [128, 624]
+  const secondModel = await tf.loadGraphModel(secondUrl);
+  const SECOND_SHAPE = [1, 1, 128, 129];
   // await secondModel.execute({"input_1:0": tf.zeros(SECOND_SHAPE)}, 'Identity:0')
-  return sgram;
+  const latentTensor = secondModel.execute(
+    { "input_1:0": sgram_reshaped },
+    "Identity:0"
+  );
+  sgram_reshaped.dispose();
+  console.log(latentTensor);
+  return {sgramTensor, latentTensor};
 }
 
 async function tensorToImage(tensor) {
   const max = await tf.max(tensor);
   const min = await tf.min(tensor);
+  await console.log(max.data())
+  await console.log(min.data())
   const scaled = await tf.div(tf.sub(tensor, min), tf.sub(max, min));
-  var values = await tf.transpose(scaled).data();
+  var values = await scaled.data();
+  console.log(values)
   const N_SHADES = 72;
   values = Array.from(values);
   const colors = colormap({
@@ -95,22 +103,50 @@ async function tensorToImage(tensor) {
     format: "rba",
     alpha: 1,
   });
+  console.log(colors)
+
   values = values.map((value) => {
     const index = Math.floor(value * N_SHADES);
-    return colors[index];
+    return [0, 0, 0, 1]
+    // return colors[index];
   });
-  let imageData = new Uint8Array();
-  imageData = Uint8Array.from(values.flat());
-  console.log(imageData);
+  var imageValues = new Uint8ClampedArray();
+  imageValues = Uint8ClampedArray.from(values.flat());
+  console.log("assigned as")
+  console.log(imageValues)
+  return imageValues;
 }
 
-
 function ShowImage(props) {
-  const imageData = props.imageData
-  const canvasRef = React.useRef(null)
+  const canvasRef = React.useRef();
+  const draw = useCallback((ctx) => {
+    var iData = ctx.getImageData(0, 0, props.width, props.height);
+    console.log("here")
+    console.log(props.buffer)
+    iData.data.set(props.buffer);
+    ctx.putImageData(iData, 0, 0);
+  }, [props.buffer, props.height, props.width])
+
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (props.buffer) {
+      draw(ctx)
+    }
+  
+    // if (props.buffer) {
+    //   var iData = ctx.createImageData(props.width, props.height);
+    //   console.log("Here")
+    //   console.log(props.buffer)
+    //   iData.rdata.set(props.buffer);
+    //   ctx.putImageData(iData, 0, 0);
+    // }  
+  }, [draw, props.buffer])
+
   return (
     <div>
-      <canvas ref={canvasRef} width={624} height={128} />
+      <canvas ref={canvasRef} {...props} />
     </div>
   );
 }
@@ -121,16 +157,21 @@ async function runInferenceOnFile(blob) {
   var buffer = await blob
     .arrayBuffer()
     .then((arrayBuffer) => audioCtx.decodeAudioData(arrayBuffer));
-  tf.enableDebugMode(); // remove in production
-  const latentVector = await resampleAudioBuffer(buffer)
+  tf.enableDebugMode(); // development
+  // tf.enableProdMode(); // production TODO: Run inference in worker thread
+  const { latentTensor, sgramTensor } = await resampleAudioBuffer(buffer)
     .then((resampled) => prepareTensor(resampled))
     .then((tensor) => runInference(tensor));
-  await tensorToImage(latentVector);
+  const sgramData = await tensorToImage(sgramTensor);
   const end = new Date();
   const inferenceTime = end.getTime() - start.getTime();
-  console.log(latentVector);
   console.log(inferenceTime);
-  return [buffer, latentVector, inferenceTime];
+  return {
+    audio: buffer,
+    image: sgramData,
+    latent: latentTensor,
+    time: inferenceTime,
+  };
 }
 
 function Dropzone(props) {
@@ -184,15 +225,11 @@ function Dropzone(props) {
 }
 
 function SearchBar(props) {
-  return (
-    <Dropzone />
-  );
+  return <Dropzone />;
 }
 
 function SearchInfo(props) {
-  return (
-    "Hello"
-  );
+  return "Hello";
 }
 
 function NeighborSearch(props) {
@@ -214,4 +251,4 @@ function App(props) {
   );
 }
 
-export { runInferenceOnFile }
+export { runInferenceOnFile, ShowImage };

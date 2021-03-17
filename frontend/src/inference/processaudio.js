@@ -1,4 +1,3 @@
-function async
 
 function Dropzone(props) {
     const onDrop = useCallback((acceptedFiles) => {

@@ -1,4 +1,10 @@
-import React, { useCallback, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+} from "react";
 import AppBar from "@material-ui/core/AppBar";
 import Button from "@material-ui/core/Button";
 import LibraryMusicOutlinedIcon from "@material-ui/icons/LibraryMusicOutlined";
@@ -15,7 +21,7 @@ import Container from "@material-ui/core/Container";
 import Link from "@material-ui/core/Link";
 
 import { useDropzone } from "react-dropzone";
-import { runInferenceOnFile } from "./App";
+import { runInferenceOnFile, ShowImage } from "./App";
 
 function Copyright() {
   return (
@@ -74,35 +80,81 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-function useDropzoneConfig(props) {
-  const onDrop = useCallback(
-    (acceptedFiles) => runInferenceOnFile(acceptedFiles[0]),
-    []
-  );
-  return useDropzone({
-    onDrop,
-    accept: "audio/*",
-    style: () => {},
-    activeStyle: () => {},
-    className: "",
-    disableClick: true,
-    maxFiles: 1,
-  });
-}
+// function useDropzoneConfig(props) {
+//   const [imageData, setImageData] = useState(null);
+//   const [latent, setLatent] = useState(null);
+//   const [runtime, setRuntime] = useState(null);
+//   const [imageDims, setImageDims] = useState([128, 624]);
+//   const onDrop = useCallback((acceptedFiles) => {
+//     const { audio, image, latent, time } = runInferenceOnFile(acceptedFiles[0]);
+//     console.log(image);
+//     setImageData(image);
+//     setLatent(latent);
+//     setRuntime(time);
+//   }, []);
+//   const {
+//     acceptedFiles,
+//     getRootProps,
+//     getInputProps,
+//     isDragActive,
+//     open,
+//     isDragAccept,
+//     isDragReject,
+//   } = useDropzone({});
+//   return {
+//     imageData,
+//     latent,
+//     runtime,
+//     imageDims,
+//     acceptedFiles,
+//     getRootProps,
+//     getInputProps,
+//     isDragActive,
+//     open,
+//     isDragAccept,
+//     isDragReject,
+//   };
+// }
 
 const cards = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 export default function Layout() {
   const classes = useStyles();
+  const [upload, setUpload] = useState(null);
+  const [sgram, setSgram] = useState(null);
+  const [height, setHeight] = useState(128);
+  const [width, setWidth] = useState(624);
+
   const {
     acceptedFiles,
+    open,
     getRootProps,
     getInputProps,
     isDragActive,
-    isDragAccept,
-    isDragReject,
-  } = useDropzoneConfig();
-  const uploadInputRef = useRef(null);
+  } = useDropzone({
+    onDrop: (acceptedFiles) => {
+      setUpload(acceptedFiles[0]);
+    },
+    accept: "audio/*",
+    disableClick: true,
+    multiple: false,
+    noClick: true,
+    noKeyboard: true,
+  });
+  // setHeight(imageDims[0])
+  // setWidth(imageDims[1]);
+  useEffect(() => {
+    if (upload) {
+      console.log("ran effect")
+      runInferenceOnFile(upload).then(({latent, image, time}) => {
+        console.log(upload)
+        console.log(latent)
+        console.log(image)
+        console.log(time)
+        setSgram(image)
+      });
+    }
+  }, [upload]);
 
   return (
     <React.Fragment>
@@ -111,7 +163,7 @@ export default function Layout() {
         <Toolbar>
           <LibraryMusicOutlinedIcon className={classes.icon} />
           <Typography variant="h6" color="inherit" noWrap>
-            Album layout
+            A Title
           </Typography>
         </Toolbar>
       </AppBar>
@@ -119,107 +171,102 @@ export default function Layout() {
         className={classes.fullScreenDropzone}
         {...(isDragActive ? null : null)}
       ></div>
-      <Container >
-      <div {...getRootProps({ className: classes.dropzone })}>
-        <main>
-          {/* Hero unit */}
-          <div className={classes.heroContent}>
-            <Container maxWidth="sm" color="primary.main">
-              <Typography
-                component="h3"
-                variant="h4"
-                align="center"
-                color="textPrimary"
-                gutterBottom
-              >
-                Free music for commercial use, powered by AI
-              </Typography>
-              <Typography
-                variant="h6"
-                align="center"
-                color="textSecondary"
-                paragraph
-              >
-                Add a song to find. Your music never leaves your device.
-              </Typography>
-              <div className={classes.heroButtons}>
-                <Grid container spacing={2} justify="center">
-                  <Grid item>
-                    <input
-                      ref={uploadInputRef}
-                      style={{ display: "none" }}
-                      {...getInputProps()}
-                    />
-                    <Button
-                      onClick={() =>
-                        uploadInputRef.current && uploadInputRef.current.click()
-                      }
-                      component="label"
-                      variant="contained"
-                      color="primary"
-                    >
-                      Search by mp3
-                    </Button>
+      <Container>
+        <div {...getRootProps({ className: classes.dropzone })}>
+          <input {...getInputProps()} />
+          <main>
+            {/* Hero unit */}
+            <div className={classes.heroContent}>
+              <Container maxWidth="sm" color="primary.main">
+                <Typography
+                  component="h3"
+                  variant="h4"
+                  align="center"
+                  color="textPrimary"
+                  gutterBottom
+                >
+                  Some great copy
+                </Typography>
+                <Typography
+                  variant="h6"
+                  align="center"
+                  color="textSecondary"
+                  paragraph
+                >
+                  And even better copy
+                </Typography>
+                <div className={classes.heroButtons}>
+                  <Grid container spacing={2} justify="center">
+                    <Grid item>
+                      <Button
+                        onClick={open}
+                        component="label"
+                        variant="contained"
+                        color="primary"
+                      >
+                        Search by mp3
+                      </Button>
+                    </Grid>
+                    <Grid item>
+                      <Button variant="outlined" color="primary">
+                        or connect your Spotify account
+                      </Button>
+                    </Grid>
                   </Grid>
-                  <Grid item>
-                    <Button variant="outlined" color="primary">
-                      or connect your Spotify account
-                    </Button>
+                  <ShowImage height={height} width={width} buffer={sgram} />
+                </div>
+              </Container>
+            </div>
+            <Container className={classes.cardGrid} maxWidth="md">
+              {/* End hero unit */}
+              <Grid container spacing={4}>
+                {cards.map((card) => (
+                  <Grid item key={card} xs={12} sm={6} md={4}>
+                    <Card className={classes.card}>
+                      <CardMedia
+                        className={classes.cardMedia}
+                        image="https://source.unsplash.com/random"
+                        title="Image title"
+                      />
+                      <CardContent className={classes.cardContent}>
+                        <Typography gutterBottom variant="h5" component="h2">
+                          Heading
+                        </Typography>
+                        <Typography>
+                          This is a media card. You can use this section to
+                          describe the content.
+                        </Typography>
+                      </CardContent>
+                      <CardActions>
+                        <Button size="small" color="primary">
+                          View
+                        </Button>
+                        <Button size="small" color="primary">
+                          Edit
+                        </Button>
+                      </CardActions>
+                    </Card>
                   </Grid>
-                </Grid>
-              </div>
+                ))}
+              </Grid>
             </Container>
-          </div>
-          <Container className={classes.cardGrid} maxWidth="md">
-            {/* End hero unit */}
-            <Grid container spacing={4}>
-              {cards.map((card) => (
-                <Grid item key={card} xs={12} sm={6} md={4}>
-                  <Card className={classes.card}>
-                    <CardMedia
-                      className={classes.cardMedia}
-                      image="https://source.unsplash.com/random"
-                      title="Image title"
-                    />
-                    <CardContent className={classes.cardContent}>
-                      <Typography gutterBottom variant="h5" component="h2">
-                        Heading
-                      </Typography>
-                      <Typography>
-                        This is a media card. You can use this section to
-                        describe the content.
-                      </Typography>
-                    </CardContent>
-                    <CardActions>
-                      <Button size="small" color="primary">
-                        View
-                      </Button>
-                      <Button size="small" color="primary">
-                        Edit
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </main>
-        {/* Footer */}
-        <footer className={classes.footer}>
-          <Typography variant="h6" align="center" gutterBottom>
-            Footer
-          </Typography>
-          <Typography
-            variant="subtitle1"
-            align="center"
-            color="textSecondary"
-            component="p"
-          >
-            Something here to give the footer a purpose!
-          </Typography>
-          <Copyright />
-        </footer>
-      </div>
+          </main>
+          {/* Footer */}
+          <footer className={classes.footer}>
+            <Typography variant="h6" align="center" gutterBottom>
+              Footer
+            </Typography>
+            <Typography
+              variant="subtitle1"
+              align="center"
+              color="textSecondary"
+              component="p"
+            >
+              Something here to give the footer a purpose!
+            </Typography>
+            <Copyright />
+          </footer>
+        </div>
       </Container>
       {/* End footer */}
     </React.Fragment>
