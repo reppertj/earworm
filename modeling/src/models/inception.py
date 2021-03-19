@@ -14,7 +14,7 @@ from pytorch_metric_learning.testers import GlobalEmbeddingSpaceTester
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
 from src.data.dataset import SgramDataModule  # type: ignore
 from src.modules.inception import ConditionalInceptionLikeEncoder  # type: ignore
-from src.utils.dev_utils import debug_cuda, delete  # Type: ignore
+from src.utils.dev_utils import debug_cuda, delete  # type: ignore
 from src.utils.model_utils import (  # type: ignore
     anchor_negative_triplet_mask,
     anchor_positive_triplet_mask,
@@ -308,7 +308,7 @@ class MusicInception(pl.LightningModule):
                     embeddings_come_from_same_source=True,
                 )
                 accuracies.append({k + f"_{category}": v for k, v in accuracy.items()})
-            accuracies = {
+            accuracies = {  # type: ignore
                 k: v for dct in accuracies for k, v in dct.items()
             }  # type ignore
             if self.logger is not None:
