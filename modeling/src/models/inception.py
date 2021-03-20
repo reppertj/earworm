@@ -1,30 +1,20 @@
 from typing import Dict, List, Tuple
 from warnings import filterwarnings
 
-import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 import torch
-import torch.nn.functional as F
-from numpy.core.numeric import full
 from pytorch_metric_learning.distances import DotProductSimilarity
 from pytorch_metric_learning.losses import NTXentLoss, ProxyAnchorLoss
-from pytorch_metric_learning.miners import BatchHardMiner
 from pytorch_metric_learning.miners.batch_easy_hard_miner import BatchEasyHardMiner
 from pytorch_metric_learning.testers import GlobalEmbeddingSpaceTester
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
 from src.data.dataset import SgramDataModule  # type: ignore
 from src.modules.inception import ConditionalInceptionLikeEncoder  # type: ignore
-from src.utils.dev_utils import debug_cuda, delete  # type: ignore
+from src.utils.dev_utils import delete  # type: ignore
 from src.utils.model_utils import (  # type: ignore
-    anchor_negative_triplet_mask,
-    anchor_positive_triplet_mask,
     histogram_from_weights,
-    pairwise_distances,
     visualizer_hook,
 )
-from torch import nn
-from torch.autograd import Variable
-from torch.utils.data.dataloader import DataLoader
 from umap import UMAP
 
 filterwarnings("ignore", category=UserWarning)
@@ -33,16 +23,16 @@ filterwarnings("ignore", category=UserWarning)
 DEFAULT_HPARAMS = {
     "latent_dim": 256,
     "batch_size": 128,
-    "lr": 0.01,
-    "b1": 0.9,
-    "b2": 0.99,
-    "npairs_temperature": 10,
+    "lr": 0.004,
+    "b1": 0.88,
+    "b2": 0.995,
+    "npairs_temperature": 0.8,
     "track_reg": 20.,
-    "normalize_embeddings": False,
+    "normalize_embeddings": True,
     "margin": 0.1,
     "embeddings_l2_lambda": 5e-3,
     "mask_l1_lambda": 5e-4,
-    "checkpoint_path": "model_checkpoints/pretrain--{epoch}--{train_loss}",
+    "checkpoint_path": "model_checkpoints/train--{epoch}--{train_loss}",
 }
 
 
