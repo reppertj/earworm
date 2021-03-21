@@ -3,6 +3,9 @@ from warnings import filterwarnings
 
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
+from torch.cuda.amp import autocast
+from numpy.core.numeric import full
 from pytorch_metric_learning.distances import DotProductSimilarity
 from pytorch_metric_learning.losses import NTXentLoss, ProxyAnchorLoss
 from pytorch_metric_learning.miners.batch_easy_hard_miner import BatchEasyHardMiner
@@ -16,6 +19,7 @@ from src.utils.model_utils import (  # type: ignore
     visualizer_hook,
 )
 from umap import UMAP
+from pytorch_lightning.utilities import AMPType
 
 filterwarnings("ignore", category=UserWarning)
 
@@ -42,10 +46,12 @@ def data_and_label_getter(batch):
 
 class MusicInception(pl.LightningModule):
     def __init__(
-        self, datamodule: SgramDataModule, hparams: dict = DEFAULT_HPARAMS
+        self, datamodule: SgramDataModule = None, hparams: dict = DEFAULT_HPARAMS
     ) -> None:
         super().__init__()
         self.hparams = hparams  # type: ignore
+        if datamodule is None:
+            raise ValueError("Datamodule cannot be none")
         self.dm = datamodule  # Don't call this self.datamodule b/c pytorch lightning looks for this first and we want to hide it from the trainer
         self.automatic_optimization = False
         self.weight_decay_steps = 0
@@ -68,6 +74,7 @@ class MusicInception(pl.LightningModule):
             visualizer_hook=visualizer_hook,
             accuracy_calculator=AccuracyCalculator(),
         )
+        self.save_hyperparameters()
 
     def make_category_losses(self):
         for n, loader in enumerate(self.train_dataloader()):
@@ -92,26 +99,28 @@ class MusicInception(pl.LightningModule):
         matched_sgrams should be `batch_size, 2, 1, H, W` for Siamese regularization
         """
 
-        if optimizer_idx == 1:
-            return
-
         model_opt, loss_opt = self.optimizers()
+
 
         model_opt.zero_grad()
         loss_opt.zero_grad()
 
         full_loss = 0
+        
+        assert optimizer_idx != 1  # optimizer_idx shouldn't do anything
 
         for condition in range(len(batch)):
             """ Use a closure to free tensors between conditions """
             #  @debug_cuda
             def handle_condition():
+
                 nonlocal full_loss
                 conditional_sgrams, conditional_labels, track_sgrams = batch[condition]
                 assert (
                     conditional_sgrams.shape[1:] == self.spectrogram_shape
                 )  # (N, 1, H, W)
                 batch_size = conditional_sgrams.shape[0]
+                
 
                 # Conditional proxy loss
                 conditional_mask_in = torch.zeros(
@@ -126,34 +135,20 @@ class MusicInception(pl.LightningModule):
                 conditional_loss = getattr(self, f"loss_func_{condition}")(
                     conditional_embeddings, conditional_labels
                 )
-                loss = (
-                    conditional_loss
-                    + self.hparams.embeddings_l2_lambda * embeddings_norm
-                    + self.hparams.mask_l1_lambda * mask_weight_norm
-                )
 
-                self.manual_backward(loss)
-                self.logger.experiment.log(
-                    {
-                        f"cond_{condition}_loss": conditional_loss,
-                        f"cond_{condition}_embed_l2": embeddings_norm,
-                        f"cond_{condition}_mask_l1": mask_weight_norm,
-                    },
-                )
-                full_loss += loss.item()
-                delete(
-                    loss,
-                    conditional_loss,
-                    conditional_embeddings,
-                    embeddings_norm,
-                    mask_weight_norm,
-                )
+                if hasattr(self.logger.experiment, "log"):
+                    self.logger.experiment.log(
+                        {
+                            f"cond_{condition}_loss": conditional_loss,
+                            f"cond_{condition}_embed_l2": embeddings_norm,
+                            f"cond_{condition}_mask_l1": mask_weight_norm,
+                        },
+                    )
 
                 # Track loss
                 track_labels = torch.tensor(
                     list(zip(range(batch_size), range(batch_size))),
-                    dtype=conditional_labels.dtype,
-                    requires_grad=False,
+                    dtype=conditional_labels.dtype
                 ).flatten()
 
                 track_mask_in = torch.full(
@@ -162,32 +157,41 @@ class MusicInception(pl.LightningModule):
                     device=track_sgrams.device,
                     dtype=track_sgrams.dtype,
                 )
-                delete(conditional_mask_in)
 
                 track_embeddings, embeddings_norm, mask_weight_norm = self.model(
                     track_sgrams.flatten(0, 1), track_mask_in
                 )
 
-                #hard_triplets = self.track_miner(track_embeddings, track_labels)
+                hard_triplets = self.track_miner(track_embeddings, track_labels)
                 track_loss = self.track_loss_func(
-                    track_embeddings, track_labels#, hard_triplets
+                    track_embeddings, track_labels, hard_triplets
                 ) * (self.hparams.track_reg)
-                loss = track_loss + embeddings_norm * self.hparams.embeddings_l2_lambda
-                self.manual_backward(loss)
-                self.logger.experiment.log(
-                    {
-                        f"track_{condition}_loss": track_loss,
-                        f"track_{condition}_l2": embeddings_norm,
-                    }
-                )
+                loss = (
+                    conditional_loss
+                    + self.hparams.embeddings_l2_lambda * embeddings_norm
+                    + self.hparams.mask_l1_lambda * mask_weight_norm
+                    + track_loss
+                    + embeddings_norm * self.hparams.embeddings_l2_lambda
+                ) / 100  # for 16-bit training
+                with autocast(enabled=False):
+                    # self.manual_backward(loss, loss_opt, retain_graph=True)
+                    self.manual_backward(loss)
+                    
+                if hasattr(self.logger.experiment, "log"):
+                     self.logger.experiment.log(
+                        {
+                            f"track_{condition}_loss": track_loss,
+                            f"track_{condition}_l2": embeddings_norm,
+                        }
+                    )
                 full_loss += track_loss.item()
-
+                
             handle_condition()
-
-        model_opt.step()
-        loss_opt.step()
-
-        self.log("train_loss", full_loss, on_step=True, on_epoch=True)
+            with autocast(enabled=False):
+                model_opt.step()
+                loss_opt.step()
+            # TODO: in manual optimization mode, do the callbacks even run?
+        self.log("train_loss", full_loss)
 
     def validation_step(self, batch, batch_idx, dataloader_idx):
         with torch.no_grad():
@@ -217,13 +221,15 @@ class MusicInception(pl.LightningModule):
                 + self.hparams.mask_l1_lambda * mask_weight_norm
             )
 
-            self.logger.experiment.log(
-                {
-                    f"cond_{dataloader_idx}_val_loss": conditional_loss,
-                    f"cond_{dataloader_idx}_val_embed_l2": embeddings_norm,
-                    f"cond_{dataloader_idx}_val_mask_l1": mask_weight_norm,
-                },
-            )
+
+            if hasattr(self.logger.experiment, "log"):            
+                self.logger.experiment.log(
+                    {
+                        f"cond_{dataloader_idx}_val_loss": conditional_loss,
+                        f"cond_{dataloader_idx}_val_embed_l2": embeddings_norm,
+                        f"cond_{dataloader_idx}_val_mask_l1": mask_weight_norm,
+                    },
+                )
             full_loss += loss.item()
             delete(
                 loss,
@@ -298,12 +304,12 @@ class MusicInception(pl.LightningModule):
                     embeddings_come_from_same_source=True,
                 )
                 accuracies.append({k + f"_{category}": v for k, v in accuracy.items()})
-            accuracies = {  # type: ignore
+            accuracies_log = {
                 k: v for dct in accuracies for k, v in dct.items()
             }  # type ignore
-            if self.logger is not None:
+            if hasattr(self.logger.experiment, "log"):
                 self.logger.experiment.log(visualizations)
-                self.logger.experiment.log(accuracies)
+                self.logger.experiment.log(accuracies_log)
                 self.logger.experiment.log(
                     histogram_from_weights(self.model.masks.weight)
                 )
@@ -340,7 +346,9 @@ class MusicInception(pl.LightningModule):
         lr = self.hparams.lr
         b1 = self.hparams.b1
         b2 = self.hparams.b2
-        model_opt = torch.optim.AdamW(self.model.parameters(), lr=lr, betas=(b1, b2), amsgrad=True)
+        model_opt = torch.optim.AdamW(
+            self.model.parameters(), lr=lr, betas=(b1, b2), amsgrad=True
+        )
         sched = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 model_opt, factor=0.2, patience=5, threshold=1e-3, verbose=True
@@ -352,8 +360,8 @@ class MusicInception(pl.LightningModule):
             loss_params += list(getattr(self, f"loss_func_{n}").parameters())
         loss_opt = torch.optim.SGD(
             loss_params,
-            lr=self.hparams.lr,
-        )
+            lr=self.hparams.lr
+            )
         return [
             {
                 "optimizer": model_opt,
