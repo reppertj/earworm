@@ -19,7 +19,7 @@ class SplitBatchNorm(torch.nn.BatchNorm2d):
         if self.training or not self.track_running_stats:
             running_mean_split = self.running_mean.repeat(self.num_splits)
             running_var_split = self.running_var.repeat(self.num_splits)
-            outcome = torch.nn.functional.batch_norm(
+            outcome = F.batch_norm(
                 input.view(-1, C * self.num_splits, H, W),
                 running_mean_split,
                 running_var_split,
