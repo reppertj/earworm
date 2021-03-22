@@ -4,35 +4,54 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-# Implementation from https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/MoCoCIFAR10.ipynb 
+# Implementation from https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/MoCoCIFAR10.ipynb
 # - Simulates split behavior of performing batch norm across GPUs; to prevent leakage of information
 # across the batch dimension during MoCo-style training
+
 
 class SplitBatchNorm(torch.nn.BatchNorm2d):
     def __init__(self, num_features, num_splits, **kwargs):
         super().__init__(num_features, **kwargs)
         self.num_splits = num_splits
-        
+
     def forward(self, input):
         N, C, H, W = input.shape
         if self.training or not self.track_running_stats:
             running_mean_split = self.running_mean.repeat(self.num_splits)
             running_var_split = self.running_var.repeat(self.num_splits)
             outcome = torch.nn.functional.batch_norm(
-                input.view(-1, C * self.num_splits, H, W), running_mean_split, running_var_split, 
-                self.weight.repeat(self.num_splits), self.bias.repeat(self.num_splits),
-                True, self.momentum, self.eps).view(N, C, H, W)
-            self.running_mean.data.copy_(running_mean_split.view(self.num_splits, C).mean(dim=0))
-            self.running_var.data.copy_(running_var_split.view(self.num_splits, C).mean(dim=0))
+                input.view(-1, C * self.num_splits, H, W),
+                running_mean_split,
+                running_var_split,
+                self.weight.repeat(self.num_splits),
+                self.bias.repeat(self.num_splits),
+                True,
+                self.momentum,
+                self.eps,
+            ).view(N, C, H, W)
+            self.running_mean.data.copy_(
+                running_mean_split.view(self.num_splits, C).mean(dim=0)
+            )
+            self.running_var.data.copy_(
+                running_var_split.view(self.num_splits, C).mean(dim=0)
+            )
             return outcome
         else:
             return torch.nn.functional.batch_norm(
-                input, self.running_mean, self.running_var, 
-                self.weight, self.bias, False, self.momentum, self.eps)
+                input,
+                self.running_mean,
+                self.running_var,
+                self.weight,
+                self.bias,
+                False,
+                self.momentum,
+                self.eps,
+            )
 
 
-
-def make_inception_conv(in_channels, out_channels, kernel_size, stride, padding, num_splits):
+def make_inception_conv(
+    in_channels, out_channels, kernel_size, stride, padding, num_splits
+):
     return nn.Sequential(
         nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False),
         nn.BatchNorm2d(out_channels, eps=0.001, momentum=0.1, affine=True),
@@ -91,21 +110,16 @@ class ReductionBlock(nn.Module):
         return torch.cat((self.conv3(x), self.conv5(x), self.pooling(x)), dim=1)
 
 
-class ConditionalInceptionLikeEncoder(nn.Module):
+class Encoder(nn.Module):
     def __init__(
         self,
         latent_dim=256,
-        n_masks=4,
-        normalize_embeddings=True,
-        mask_nonlinearity=nn.ReLU,
+        normalize_embeddings=False,
         num_splits=4,
     ):
         super().__init__()
         self.normalize_embeddings = normalize_embeddings
         self.sample_input = (torch.randn((1, 1, 128, 130)), torch.randn((1, 4)))
-
-        self.masks = nn.Linear(n_masks, latent_dim, bias=False)
-        self.mask_nonlinearity = mask_nonlinearity()
 
         layers = [
             nn.Conv2d(1, 64, 5, stride=1, padding=2),
@@ -117,31 +131,23 @@ class ConditionalInceptionLikeEncoder(nn.Module):
             layers.append(InceptionBlock(256, 256, num_splits))
             layers.append(ReductionBlock(256, 256, num_splits))
         self.inception = nn.Sequential(*layers)
-        self.fc = nn.Linear(256, latent_dim, bias=True)
 
     def logits(self, x):
         batch_size, kernel_size = x.shape[0], x.shape[2]
         x = F.avg_pool2d(x, kernel_size=kernel_size).view(batch_size, -1)
         return self.fc(x)
 
-    def forward(
-        self, x: torch.Tensor, condition: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         x: (batch_size, 1, H, W)
-        condition: (batch_size, n_masks)
 
         Out:
         embeddings: the masked embedding (batch_size, latent_dim)
-        embeddings_norm: the mean squared l2 norm of the embeddings
-        mask_weight_norm: the mean l1 norm of the masking function's weights
+        embeddings_norm: the squared l2 norm of the embeddings (batch_size,)
         """
         batch_size = x.shape[0]
-        x = self.fc(self.inception(x).view(batch_size, -1))
-        mask = self.mask_nonlinearity(self.masks(condition))
-        embeddings = x.mul(mask)
+        x = self.inception(x).view(batch_size, -1)
         if self.normalize_embeddings:
-            embeddings = F.normalize(embeddings, 2, -1)
-        embeddings_norm = torch.linalg.norm(x, ord=2, dim=-1).pow(2).mean()
-        mask_weight_norm = torch.linalg.norm(self.masks.weight, ord=1)
-        return embeddings, embeddings_norm, mask_weight_norm
+            x = F.normalize(x, 2, -1)
+        return x, torch.linalg.norm(x, ord=2, dim=-1).pow(2)
+
