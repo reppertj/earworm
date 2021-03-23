@@ -12,7 +12,7 @@ from pytorch_metric_learning.miners.batch_easy_hard_miner import BatchEasyHardMi
 from pytorch_metric_learning.testers import GlobalEmbeddingSpaceTester
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
 from src.data.dataset import SgramDataModule  # type: ignore
-from src.modules.inception import ConditionalInceptionLikeEncoder  # type: ignore
+from src.modules.inception import Encoder as ConditionalInceptionLikeEncoder # type: ignore
 from src.utils.dev_utils import delete  # type: ignore
 from src.utils.model_utils import (  # type: ignore
     histogram_from_weights,
@@ -129,8 +129,8 @@ class MusicInception(pl.LightningModule):
                     device=conditional_sgrams.device,
                 )
                 conditional_mask_in[:, condition] = 1.0
-                conditional_embeddings, embeddings_norm, mask_weight_norm = self.model(
-                    conditional_sgrams, conditional_mask_in
+                conditional_embeddings, embeddings_norm = self.model(
+                    conditional_sgrams #, conditional_mask_in
                 )
                 conditional_loss = getattr(self, f"loss_func_{condition}")(
                     conditional_embeddings, conditional_labels
@@ -141,7 +141,7 @@ class MusicInception(pl.LightningModule):
                         {
                             f"cond_{condition}_loss": conditional_loss,
                             f"cond_{condition}_embed_l2": embeddings_norm,
-                            f"cond_{condition}_mask_l1": mask_weight_norm,
+                       #     f"cond_{condition}_mask_l1": mask_weight_norm,
                         },
                     )
 
@@ -158,8 +158,8 @@ class MusicInception(pl.LightningModule):
                     dtype=track_sgrams.dtype,
                 )
 
-                track_embeddings, embeddings_norm, mask_weight_norm = self.model(
-                    track_sgrams.flatten(0, 1), track_mask_in
+                track_embeddings, embeddings_norm = self.model(
+                    track_sgrams.flatten(0, 1)#, track_mask_in
                 )
 
                 hard_triplets = self.track_miner(track_embeddings, track_labels)
@@ -168,10 +168,9 @@ class MusicInception(pl.LightningModule):
                 ) * (self.hparams.track_reg)
                 loss = (
                     conditional_loss
-                    + self.hparams.embeddings_l2_lambda * embeddings_norm
-                    + self.hparams.mask_l1_lambda * mask_weight_norm
+              #      + self.hparams.mask_l1_lambda * mask_weight_norm
                     + track_loss
-                    + embeddings_norm * self.hparams.embeddings_l2_lambda
+                    + embeddings_norm.mean() * self.hparams.embeddings_l2_lambda
                 ) / 100  # for 16-bit training
                 with autocast(enabled=False):
                     # self.manual_backward(loss, loss_opt, retain_graph=True)
@@ -181,7 +180,7 @@ class MusicInception(pl.LightningModule):
                      self.logger.experiment.log(
                         {
                             f"track_{condition}_loss": track_loss,
-                            f"track_{condition}_l2": embeddings_norm,
+                            f"track_{condition}_l2": embeddings_norm.mean(),
                         }
                     )
                 full_loss += track_loss.item()

@@ -103,7 +103,7 @@ class ReductionBlock(nn.Module):
             make_inception_conv(inner * 7 // 8, inner, 3, 2, 0, num_splits),
         )
         self.pooling = nn.Sequential(
-            nn.MaxPool2d(3, stride=2), make_inception_conv(in_channels, outer, 1, 1, 0)
+            nn.MaxPool2d(3, stride=2), make_inception_conv(in_channels, outer, 1, 1, 0, num_splits)
         )
 
     def forward(self, x):
