@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@material-ui/core": "4.11.3",
+    "@material-ui/icons": "4.11.2",
+    "@material-ui/lab": "4.0.0-alpha.57",
     "@reduxjs/toolkit": "1.5.0",
     "@testing-library/jest-dom": "5.11.4",
     "@testing-library/react": "11.0.2",
@@ -35,6 +38,7 @@
     "inquirer-directory": "2.2.0",
     "jest-styled-components": "7.0.3",
     "lint-staged": "10.3.0",
+    "local-storage": "2.0.0",
     "node-plop": "0.26.2",
     "plop": "2.7.4",
     "prettier": "2.1.1",
