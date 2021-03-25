@@ -57,7 +57,7 @@ class MulticlassDiscriminator(nn.Module):
         )
         self.sgram_side.append(nn.AdaptiveAvgPool2d(1))
         self.sgram_side.append(nn.Conv2d(576, 576, 1, 1, 0))
-        self.sgram_side = nn.Sequential(*self.sgram_side)
+        self.sgram_side = nn.Sequential(*self.sgram_side)  # type: ignore
 
         self.latent_side = nn.Sequential(
             nn.Linear(self.latent_size, 512),
