@@ -101,7 +101,9 @@ class SelectivelyContrastiveLoss(nn.Module):
         super().__init__()
         self.hn_lambda = hn_lambda
 
-    def forward(self, embeddings: torch.Tensor, labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, embeddings: torch.Tensor, labels: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return the selectively contrastive loss for a batch of embeddings and labels, using the
         cosine similarity as the distance metric.
 
@@ -120,14 +122,10 @@ class SelectivelyContrastiveLoss(nn.Module):
         distances = cosine_similarity_matrix(embeddings)
         same_mask = same_label_mask(labels)  # (batch_size, batch_size)
 
-        pos_max_idxs, pos_maxes_valid_mask = mine_easy_positives(
-            distances, same_mask
-        )
+        pos_max_idxs, pos_maxes_valid_mask = mine_easy_positives(distances, same_mask)
         easy_positive_scores = distances[torch.arange(batch_size), pos_max_idxs]
 
-        neg_max_idxs, neg_maxes_valid_mask = mine_hard_negatives(
-            distances, same_mask
-        )
+        neg_max_idxs, neg_maxes_valid_mask = mine_hard_negatives(distances, same_mask)
         hard_negative_scores = distances[torch.arange(batch_size), neg_max_idxs]
 
         combined_valid_mask = pos_maxes_valid_mask & neg_maxes_valid_mask
@@ -140,15 +138,16 @@ class SelectivelyContrastiveLoss(nn.Module):
             (hard_negative_scores < easy_positive_scores) & (hard_negative_scores < 0.8)
         ) & combined_valid_mask
 
-        hard_triplet_loss = hard_negative_scores[hard_triplet_mask].sum()  # This is the contrastive loss from the paper
+        hard_triplet_loss = hard_negative_scores[
+            hard_triplet_mask
+        ].sum()  # This is the contrastive loss from the paper
         triplets = torch.stack((easy_positive_scores, hard_negative_scores), dim=1)
-        easy_triplet_loss = -F.log_softmax(triplets[easy_triplet_mask, :] * 10, dim=1)[:, 0].sum()
-        
+        easy_triplet_loss = -F.log_softmax(triplets[easy_triplet_mask, :] * 10, dim=1)[
+            :, 0
+        ].sum()
         n_triplets = hard_triplet_mask.float().sum() + easy_triplet_mask.float().sum()
         if n_triplets == 0:
             n_triplets = 1
-        
         loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
 
         return loss, triplets
-        
