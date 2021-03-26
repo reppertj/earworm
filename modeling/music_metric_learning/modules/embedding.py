@@ -1,6 +1,8 @@
+from typing import Tuple
+
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class EmbeddingMLP(nn.Module):
@@ -8,10 +10,10 @@ class EmbeddingMLP(nn.Module):
         self,
         num_embeddings=5,
         embedding_dim=64,
-        in_dim=256,
+        in_dim=1280,
         hidden_dim=512,
         out_dim=256,
-        normalize_embeddings=True,
+        normalize_embeddings=False,
     ):
         super().__init__()
         self.normalize_embeddings = normalize_embeddings
@@ -24,7 +26,7 @@ class EmbeddingMLP(nn.Module):
             nn.Linear(hidden_dim, out_dim),
         )
 
-    def forward(self, x: torch.Tensor, words: torch.Tensor):
+    def forward(self, x: torch.Tensor, words: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass of MLP with single embedding tensor
 
         Arguments:
