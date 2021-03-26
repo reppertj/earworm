@@ -1,8 +1,8 @@
 from typing import Tuple
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 # Implementation from https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/MoCoCIFAR10.ipynb
 # - Simulates split behavior of performing batch norm across GPUs; to prevent leakage of information
@@ -117,25 +117,25 @@ class InceptionEncoder(nn.Module):
         num_splits=4,
     ):
         super().__init__()
-        self.sample_input = (torch.randn((1, 1, 128, 130)), torch.randn((1, 4)))
+        self.sample_input = torch.randn((1, 1, 128, 130))
 
         layers = [
             nn.Conv2d(1, 64, 5, stride=1, padding=2),
             nn.MaxPool2d(2, 2, 0),  # 64, 64, 64
-            InceptionBlock(64, 256, num_splits),
-            ReductionBlock(256, 256, num_splits),
+            InceptionBlock(64, 256, num_splits), # 1
+            ReductionBlock(256, 256, num_splits),  
+            InceptionBlock(256, 768, num_splits), # 2
+            ReductionBlock(768, 768, num_splits),
+            InceptionBlock(768, 768, num_splits), # 3
+            ReductionBlock(768, 768, num_splits),
+            InceptionBlock(768, 1024, num_splits), # 4
+            ReductionBlock(1024, 1024, num_splits),
+            InceptionBlock(1024, 1280, num_splits),  # 5,
+            ReductionBlock(1280, 1280, num_splits) 
         ]
-        for _ in range(4):
-            layers.append(InceptionBlock(256, 256, num_splits))
-            layers.append(ReductionBlock(256, 256, num_splits))
         self.inception = nn.Sequential(*layers)
 
-    def logits(self, x):
-        batch_size, kernel_size = x.shape[0], x.shape[2]
-        x = F.avg_pool2d(x, kernel_size=kernel_size).view(batch_size, -1)
-        return self.fc(x)
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         x: (batch_size, 1, H, W)
 
@@ -145,4 +145,4 @@ class InceptionEncoder(nn.Module):
         """
         batch_size = x.shape[0]
         x = self.inception(x).view(batch_size, -1)
-        return x, torch.linalg.norm(x, ord=2, dim=-1).pow(2)
+        return x
