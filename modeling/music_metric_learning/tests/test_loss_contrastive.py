@@ -78,7 +78,7 @@ def test_mine_easy_positives():
     assert not validities[-1]
 
 
-def test_mind_hard_negatives():
+def test_mine_hard_negatives():
     embeddings = torch.tensor(
         [angle_to_coord(float(a)) for a in [10, 15, 25, 35, 40, 45]]
     )
