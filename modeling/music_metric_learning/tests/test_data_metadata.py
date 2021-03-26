@@ -1,16 +1,4 @@
-import sys
-
-from ..data.metadata import (
-    make_dataset_df,
-    make_ontology_df,
-    make_combined_tensor_df,
-)
-import os
-
-
-def test_still_do_it(tensor_dir):
-    print(tensor_dir)
-    assert tensor_dir is not None
+from ..data.metadata import make_combined_tensor_df, make_dataset_df, make_ontology_df
 
 
 def test_make_dataset_df(audioset_csv):
