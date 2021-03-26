@@ -1,11 +1,15 @@
 import io
 import os
 import random
-from typing import Dict, Optional, Union, cast
+from typing import Dict, Literal, Optional, Union, cast
+
+from music_metric_learning.modules.mobilenet import MobileNetEncoder
+from music_metric_learning.modules.inception import InceptionEncoder
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch import nn
 import umap
 
 
@@ -130,12 +134,41 @@ def histogram_from_weights(
 
 
 def copy_params(encQ, encK, m=None):
-    """Copy parameters with momentum from query to key models for MoCo implementation
-    """
+    """Copy parameters with momentum from query to key models for MoCo implementation"""
     if m is None:
         for param_q, param_k in zip(encQ.parameters(), encK.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # don't backprop on keys
     else:
         for param_q, param_k in zip(encQ.parameters(), encK.parameters()):
-            param_k.data = param_k.data * m + param_q.data * (1. - m)
+            param_k.data = param_k.data * m + param_q.data * (1.0 - m)
+
+
+def make_encoder(
+    kind: Literal["mobilenet", "inception"],
+    pretrained: bool = True,
+    freeze_weights: bool = False,
+    max_pool: bool = True,
+) -> nn.Module:
+    """Return encoder without a final embedding layer
+
+    Arguments:
+        kind {"mobilenet", "inception"} -- Architecture to use
+
+    Keyword Arguments:
+        pretrained {bool} -- use weights from ImageNet pretrained model (only for MobileNet) (default: {True})
+        freeze_weights {bool} -- freeze weights from pretrained model (only for MobileNet) (default: {False})
+        max_pool {bool} -- use max pooling instead of average pooling after final convolutional layer (only for MobileNet) {default: {True}}
+
+    Returns:
+        nn.Module -- encoder model
+    """
+    if kind == "mobilenet":
+        model = MobileNetEncoder(
+            pretrained=pretrained, freeze_weights=freeze_weights, max_pool=max_pool
+        )
+    elif kind == "inception":
+        model = InceptionEncoder()
+    else:
+        raise ValueError("Kind must be `mobilenet` or `inception`")
+    return model
