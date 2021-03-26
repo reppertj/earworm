@@ -1,13 +1,12 @@
 import os
-from typing import List, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from numpy.random import PCG64, SeedSequence
 from sklearn.model_selection import train_test_split
-from music_metric_learning.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST 
+from music_metric_learning.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import Compose
@@ -53,6 +52,7 @@ class InverseMELNormalize(MELNormalize):
     def forward(self, sgrams: torch.Tensor):
         return super().forward(sgrams.clone())
 
+
 def prepare_tensors_from_data(
     model: nn.Module,
     in_dir: str,
@@ -85,6 +85,95 @@ def tensor_files_in_dir(directory: str):
             if f[-3:] == ".pt":
                 result.append(os.path.join(root, f))
     return result
+
+
+class CategorySpecificDataset(Dataset):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        split: Literal["train", "val", "test"],
+        transform: Optional[nn.Module],
+        val_size: Union[int, float],
+        test_size: Union[int, float],
+        random_state: Union[np.random.Generator, int],
+    ) -> None:
+        """Dataset containing tuples of
+        (tensors, class_label, track_label)
+
+        Tensors are (2, H, W), containing two spectrograms per sample. In training mode,
+        the order of these spectrograms is random. The class label is category-specific
+        (class labels are not unique across categories), but the track label is globally unique
+        across all datasets.
+
+        Arguments:
+            df {pd.DataFrame} -- DataFrame containing data paths and labels, created by 
+            `make_combined_tensor_df` with only a single category and with full paths to tensors 
+            in the `path` column
+            split -- one of 'train, 'test', or 'val'
+            transform {Optional[nn.Module]} -- transform to apply to tensor
+            val_size {Union[int, float]} -- Size of validation set
+            test_size {Union[int, float]} -- Size of test set
+            random_state {Union[np.random.Generator, int]} -- Bit generator or seed for generator
+        """
+        super().__init__()
+        self.df = df
+        self.split = split
+        self.val_size = val_size
+        self.test_size = test_size
+        self.random_state = random_state
+        self.bg = np.random.default_rng(random_state)
+        self.transform = transform
+        self.class_label_map = (
+            self.df[["label_n", "label"]].set_index("label_n").to_dict()["label"]
+        )
+        self._subset()
+
+    def _subset(self):
+        idxs = np.arange(len(self.df))
+        train, test = train_test_split(
+            idxs, test_size=self.test_size, random_state=self.random_state
+        )
+        train, val = train_test_split(
+            train, test_size=self.val_size, random_state=self.random_state
+        )
+        if self.split == "train":
+            self.idxs = train
+        elif self.split == "val":
+            self.idxs = val
+        elif self.split == "test":
+            self.idxs = test
+
+    def __len__(self):
+        return len(self.idxs)
+
+    def __getitem__(
+        self, index: Union[torch.Tensor, int]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if isinstance(index, torch.Tensor):
+            idx = index.item()
+        else:
+            idx = index
+
+        item = self.df.iloc[self.idxs[idx]]
+        left: torch.Tensor
+        right: torch.Tensor
+        left, right = torch.load(item.path)
+
+        class_label = torch.tensor(item.label_n, dtype=torch.long)
+        track_label = torch.tensor(item.item_n, dtype=torch.long)
+
+        if self.transform:
+            with torch.no_grad():
+                left = self.transform(left)
+                right = self.transform(right)
+
+        if self.split == "train":
+            selector = self.bg.integers(2)
+        else:
+            selector = 0
+        images = torch.stack(((left, right)[selector], (left, right)[1 - selector]))
+
+        return (images, class_label, track_label)
 
 
 class TripletDataset(Dataset):
@@ -160,6 +249,14 @@ class ConcatDataset(Dataset):
 
     def __len__(self):
         return min(len(d) for d in self.datasets)
+
+
+class DummyDataModule(pl.LightningDataModule):
+    def __init__(self):
+        pass
+
+    def setup(self, stage=None):
+        return None
 
 
 class ConditionalTripletDatamodule(pl.LightningDataModule):
@@ -395,9 +492,6 @@ class Transpose(nn.Module):
 
     def forward(self, tensor: torch.Tensor):
         return tensor.t()
-
-
-
 
 
 class MinMaxScale(nn.Module):
