@@ -100,5 +100,4 @@ class ClassThenInstanceSampler(Sampler):
                 )
                 idxs[i : i + m_to_sample] = choices
                 i += m_to_sample
-            # breakpoint()
         return iter(idxs)
