@@ -5,6 +5,7 @@ from torch import nn
 class MobileNetEncoder(nn.Module):
     def __init__(self, pretrained=True, freeze_weights=False, max_pool=True):
         super().__init__()
+        self.sample_input = torch.randn((1, 1, 128, 130))
         mobilenet = torch.hub.load(
             "pytorch/vision:v0.8.2", "mobilenet_v2", pretrained=pretrained
         )
