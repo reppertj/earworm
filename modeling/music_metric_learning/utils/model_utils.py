@@ -1,4 +1,3 @@
-import io
 import os
 import random
 from typing import Dict, Literal, Optional, Union, cast
@@ -172,3 +171,29 @@ def make_encoder(
     else:
         raise ValueError("Kind must be `mobilenet` or `inception`")
     return model
+
+
+def copy_parameters(
+    query_encoder: nn.Module, key_enconder: nn.Module, momentum: Optional[float] = None
+) -> None:
+    """Copy or update parameters between key and query encoders to use for MoCo queue. Modifies parameters in place.
+    Implementation adapted from https://github.com/facebookresearch/moco
+
+    Arguments:
+        query_encoder {nn.Module} -- Model to copy parameters from
+        key_enconder {nn.Module} -- Model to copy paramters to
+
+    Keyword Arguments:
+        momentum {Optional[float]} -- Momentum to applyto updates. If None, copy parameters wholesale and do not backprop on key parameters (use to setup initial key encoder) (default: {None})
+    """
+    if momentum is None:
+        for param_q, param_k in zip(
+            query_encoder.parameters(), key_enconder.parameters()
+        ):
+            param_k.data.copy_(param_q.data)  # initialize
+            param_k.requires_grad = False  # not update by gradient
+    else:
+        for param_q, param_k in zip(
+            query_encoder.parameters(), key_enconder.parameters()
+        ):
+            param_k.data = param_k.data * momentum + param_q.data * (1.0 - momentum)
