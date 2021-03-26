@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class MobileNetEmbedding(nn.Module):
+class MobileNetEncoder(nn.Module):
     def __init__(self, pretrained=True, freeze_weights=False, max_pool=True):
         super().__init__()
         mobilenet = torch.hub.load(

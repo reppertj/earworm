@@ -111,7 +111,7 @@ class ReductionBlock(nn.Module):
         return torch.cat((self.conv3(x), self.conv5(x), self.pooling(x)), dim=1)
 
 
-class Encoder(nn.Module):
+class InceptionEncoder(nn.Module):
     def __init__(
         self,
         num_splits=4,
