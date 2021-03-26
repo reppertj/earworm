@@ -35,6 +35,24 @@ def same_label_mask(labels: torch.Tensor) -> torch.Tensor:
     mask = repeated == repeated.t()
     return mask.fill_diagonal_(0)
 
+def keyed_same_label_mask(query_labels: torch.Tensor, key_labels: torch.Tensor) -> torch.Tensor:
+    """Return a boolean mask indicating where key and query labels are the same. For this to make
+    sense, the key labels and query labels should not correspond to identical items.
+
+    Arguments:
+        query_labels {torch.Tensor} -- long tensor containing query (i.e., anchor) labels (batch_size,)
+        key_labels {torch.Tensor} -- long tensor containing key labels for positive/negative pairings
+
+    Returns:
+        torch.Tensor -- bool tensor (batch_size, key_size)
+    """
+    batch_size = query_labels.shape[0]
+    key_size = key_labels.shape[0]
+    query_repeated = query_labels.repeat(key_size, 1)
+    key_repeated = key_labels.repeat(batch_size, 1)
+    mask = key_repeated == query_repeated.t()
+    return mask
+
 
 def mine_easy_positives(
     distances: torch.Tensor, same_label_mask: torch.Tensor
