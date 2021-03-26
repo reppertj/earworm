@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -20,6 +20,25 @@ def cosine_similarity_matrix(embeddings: torch.Tensor) -> torch.Tensor:
     return distances
 
 
+def keyed_cosine_similarity_matrix(
+    query_embeddings: torch.Tensor, key_embeddings: torch.Tensor
+) -> torch.Tensor:
+    """Like `cosine_similarity_matrix`, but for separate query (anchor) and key (positive/negative) embeddings
+
+    Arguments:
+        query_embeddings {query_embeddings} -- Does not need to be normalized (batch_size, embeddings_dim)
+        key_embeddings {key_embeddings} -- Does not need to be normalized (key_size, embeddings_dim)
+
+
+    Returns:
+        torch.Tensor -- Cosine similarity matrix of (batch_size, key_size)
+    """
+    key_embeddings_normed = F.normalize(key_embeddings, p=2, dim=1)
+    query_embeddings_normed = F.normalize(query_embeddings, p=2, dim=1)
+    distances = query_embeddings_normed.mm(key_embeddings_normed.t())
+    return distances
+
+
 def same_label_mask(labels: torch.Tensor) -> torch.Tensor:
     """Returns a symmetric boolean mask indicating where pairwise labels are the same. An instance is
     considered to not share a label with itself, so the diagonal is false
@@ -35,7 +54,10 @@ def same_label_mask(labels: torch.Tensor) -> torch.Tensor:
     mask = repeated == repeated.t()
     return mask.fill_diagonal_(0)
 
-def keyed_same_label_mask(query_labels: torch.Tensor, key_labels: torch.Tensor) -> torch.Tensor:
+
+def keyed_same_label_mask(
+    query_labels: torch.Tensor, key_labels: torch.Tensor
+) -> torch.Tensor:
     """Return a boolean mask indicating where key and query labels are the same. For this to make
     sense, the key labels and query labels should not correspond to identical items.
 
@@ -72,10 +94,9 @@ def mine_easy_positives(
     distances = (
         distances.clone().detach()
     )  # We'll modify this, and it's not needed for backprop from here forward
-    assert same_label_mask[0, 0] == torch.tensor(0, dtype=torch.bool)
     distances[
         ~same_label_mask
-    ] = -1  # Only consider positive pairings; also, ignore diagonal
+    ] = -1  # Only consider positive pairings
     distances[distances > 0.9999] = 1  # For numerical reasons?
     pos_maxes, pos_max_idxs = distances.max(dim=1)  # (batch_size,)
     pos_maxes_valid_mask = (pos_maxes > -1) & (
@@ -120,7 +141,11 @@ class SelectivelyContrastiveLoss(nn.Module):
         self.hn_lambda = hn_lambda
 
     def forward(
-        self, embeddings: torch.Tensor, labels: torch.Tensor
+        self,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        key_embeddings: Optional[torch.Tensor] = None,
+        key_labels: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return the selectively contrastive loss for a batch of embeddings and labels, using the
         cosine similarity as the distance metric.
@@ -137,8 +162,16 @@ class SelectivelyContrastiveLoss(nn.Module):
         """
         batch_size = embeddings.shape[0]
 
-        distances = cosine_similarity_matrix(embeddings)
-        same_mask = same_label_mask(labels)  # (batch_size, batch_size)
+        if key_embeddings is None:
+            assert key_labels is None
+            distances = cosine_similarity_matrix(embeddings)
+            same_mask = same_label_mask(labels)  # (batch_size, batch_size)
+        else:
+            assert key_labels is not None
+            distances = keyed_cosine_similarity_matrix(
+                embeddings, key_embeddings=key_embeddings
+            )
+            same_mask = keyed_same_label_mask(labels, key_labels=key_labels)
 
         pos_max_idxs, pos_maxes_valid_mask = mine_easy_positives(distances, same_mask)
         easy_positive_scores = distances[torch.arange(batch_size), pos_max_idxs]
@@ -167,5 +200,4 @@ class SelectivelyContrastiveLoss(nn.Module):
         if n_triplets == 0:
             n_triplets = 1
         loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
-
         return loss, triplets
