@@ -103,7 +103,8 @@ class ReductionBlock(nn.Module):
             make_inception_conv(inner * 7 // 8, inner, 3, 2, 0, num_splits),
         )
         self.pooling = nn.Sequential(
-            nn.MaxPool2d(3, stride=2), make_inception_conv(in_channels, outer, 1, 1, 0, num_splits)
+            nn.MaxPool2d(3, stride=2),
+            make_inception_conv(in_channels, outer, 1, 1, 0, num_splits),
         )
 
     def forward(self, x):
@@ -113,12 +114,9 @@ class ReductionBlock(nn.Module):
 class Encoder(nn.Module):
     def __init__(
         self,
-        latent_dim=256,
-        normalize_embeddings=False,
         num_splits=4,
     ):
         super().__init__()
-        self.normalize_embeddings = normalize_embeddings
         self.sample_input = (torch.randn((1, 1, 128, 130)), torch.randn((1, 4)))
 
         layers = [
@@ -147,7 +145,4 @@ class Encoder(nn.Module):
         """
         batch_size = x.shape[0]
         x = self.inception(x).view(batch_size, -1)
-        if self.normalize_embeddings:
-            x = F.normalize(x, 2, -1)
         return x, torch.linalg.norm(x, ord=2, dim=-1).pow(2)
-
