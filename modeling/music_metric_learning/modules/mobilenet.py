@@ -18,14 +18,18 @@ class MobileNetEncoder(nn.Module):
         rest = list(
             [list(layer.children()) for layer in list(mobilenet.children())][0][1:]
         )
-        if freeze_weights:
-            for layer in rest:
-                if hasattr(layer, "requires_grad"):
-                    layer.requires_grad(False)
         pool = (
             nn.AdaptiveMaxPool2d((1, 1)) if max_pool else nn.AdaptiveAvgPool2d((1, 1))
         )
         self.model = nn.Sequential(new_first, *(first_bn_relu + rest), pool)
+        if freeze_weights:
+            self.freeze_weights(True)
+
+    
+    def freeze_weights(self, freeze: bool = True):
+        for param in self.parameters(recurse=True):
+            if hasattr(param, "requires_grad"):
+                param.requires_grad = not freeze
 
     def forward(self, x):
         return self.model(x).squeeze().squeeze()
