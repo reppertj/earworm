@@ -219,11 +219,13 @@ class MusicMetricDatamodule(pl.LightningDataModule):
         self.random_state = random_state
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.is_setup = False
 
     def setup(self, stage=None):
         self.df = pd.read_csv(self.csv)
         self.df.path = self.tensor_dir + self.df.path
         self.bg = np.random.default_rng(self.random_state)
+        self.is_setup = True
     
     def train_dataloader(self, dataset_idx, batch_size=None):
         batch_size = batch_size or self.batch_size
