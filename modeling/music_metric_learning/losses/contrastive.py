@@ -132,15 +132,20 @@ def mine_hard_negatives(
 
 
 class SelectivelyContrastiveLoss(nn.Module):
-    def __init__(self, hn_lambda: float = 1.0):
+    def __init__(self, hn_lambda: float = 1.0, temperature: float = 0.1, hard_cutoff: float = 0.8):
         """Selectively contrastive loss, from https://arxiv.org/pdf/2007.12749.pdf
         See reference implementation at https://github.com/littleredxh/HardNegative/blob/master/_code/Loss.py
 
         Arguments:
             hn_lambda: weighting factor for the hard negative loss
+            temperature: temperature hyperparamter for NCXEnt loss
+            hard_cutoff: above this threshold for cosine similarity, negative examples will be
+            considered hard even if the easiest example is closer
         """
         super().__init__()
         self.hn_lambda = hn_lambda
+        self.temperature = temperature
+        self.hard_cutoff = hard_cutoff
 
     def forward(
         self,
@@ -184,18 +189,18 @@ class SelectivelyContrastiveLoss(nn.Module):
         combined_valid_mask = pos_maxes_valid_mask & neg_maxes_valid_mask
 
         hard_triplet_mask = (
-            (hard_negative_scores > easy_positive_scores) | (hard_negative_scores > 0.8)
+            (hard_negative_scores > easy_positive_scores) | (hard_negative_scores > self.hard_cutoff)
         ) & combined_valid_mask
 
         easy_triplet_mask = (
-            (hard_negative_scores < easy_positive_scores) & (hard_negative_scores < 0.8)
+            (hard_negative_scores < easy_positive_scores) & (hard_negative_scores < self.hard_cutoff)
         ) & combined_valid_mask
 
         hard_triplet_loss = hard_negative_scores[
             hard_triplet_mask
         ].sum()  # This is the contrastive loss from the paper
         triplets = torch.stack((easy_positive_scores, hard_negative_scores), dim=1)
-        easy_triplet_loss = -F.log_softmax(triplets[easy_triplet_mask, :] * 10, dim=1)[
+        easy_triplet_loss = -F.log_softmax(triplets[easy_triplet_mask, :] / self.temperature, dim=1)[
             :, 0
         ].sum()
         n_triplets = hard_triplet_mask.float().sum() + easy_triplet_mask.float().sum()
