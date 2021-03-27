@@ -1,5 +1,6 @@
 import pytest
 from dotenv import load_dotenv
+from music_metric_learning.data.metadata import make_dataset_df, make_ontology_df, make_combined_tensor_df, save_tensor_df
 import os
 
 assert load_dotenv(dotenv_path="local.modeling.env") == True
@@ -25,3 +26,16 @@ def audioset_csv():
     return os.getenv(
         "AUDIOSET_TRAIN_CSV_PATH"
     )
+    
+@pytest.fixture(scope="session")
+def train_csv(tmpdir_factory, tensor_dir, audioset_json, audioset_csv):
+    dataset_df = make_dataset_df(audioset_csv)
+    ontology_df = make_ontology_df(audioset_json)
+    df = make_combined_tensor_df(tensor_dir, dataset_df, ontology_df)
+    out_path = tmpdir_factory.mktemp("data").join("train.csv")
+    save_tensor_df(out_path, df)
+    return out_path
+
+
+
+    
