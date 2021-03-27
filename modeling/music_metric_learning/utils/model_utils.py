@@ -198,7 +198,7 @@ def copy_parameters(
         ):
             param_k.data = param_k.data * momentum + param_q.data * (1.0 - momentum)
 
-
+@torch.no_grad()
 def batch_shuffle_single_gpu(x):
     """
     Batch shuffle, for making use of BatchNorm on a single gpu to avoid 
@@ -211,6 +211,7 @@ def batch_shuffle_single_gpu(x):
     idx_unshuffle = torch.argsort(idx_shuffle)
     return x[idx_shuffle], idx_unshuffle
 
+@torch.no_grad()
 def batch_unshuffle_single_gpu(x, idx_unshuffle):
     """
     Undo batch shuffle.
