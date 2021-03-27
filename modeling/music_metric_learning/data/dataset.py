@@ -1,5 +1,5 @@
 import os
-from typing import List, Literal, Optional, Tuple, Type, Union
+from typing import Dict, List, Literal, Optional, Tuple, Type, Union, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -99,12 +99,18 @@ def tensor_files_in_dir(directory: str):
                 result.append(os.path.join(root, f))
     return result
 
-
+class MusicBatchPart(TypedDict):
+    images: torch.Tensor
+    category_n: torch.Tensor
+    class_labels: torch.Tensor
+    track_category_n: torch.Tensor
+    track_labels: torch.Tensor
 class CategorySpecificDataset(Dataset):
     def __init__(
         self,
         df: pd.DataFrame,
         split: Literal["train", "val", "test"],
+        category_n: int,
         transform: Optional[nn.Module],
         val_size: Union[int, float],
         test_size: Union[int, float],
@@ -131,6 +137,7 @@ class CategorySpecificDataset(Dataset):
         super().__init__()
         self.df = df
         self.split = split
+        self.category_n = category_n
         self.val_size = val_size
         self.test_size = test_size
         self.random_state = random_state
@@ -162,7 +169,7 @@ class CategorySpecificDataset(Dataset):
 
     def __getitem__(
         self, index: Union[torch.Tensor, int]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> MusicBatchPart:
         if isinstance(index, torch.Tensor):
             idx = int(index.item())
         else:
@@ -173,7 +180,10 @@ class CategorySpecificDataset(Dataset):
         right: torch.Tensor
         left, right = torch.load(item.path)
 
+        category_n = torch.tensor(self.category_n, dtype=torch.long)
         class_label = torch.tensor(item.label_n, dtype=torch.long)
+
+        track_category_n = torch.tensor(4, dtype=torch.long)
         track_label = torch.tensor(item.item_n, dtype=torch.long)
 
         if self.transform:
@@ -188,7 +198,13 @@ class CategorySpecificDataset(Dataset):
         images = torch.stack(((left, right)[selector], (left, right)[1 - selector]))
         images = images.unsqueeze(1)  # Add channel dimension
 
-        return images, class_label, track_label
+        return {
+            "images": images,
+            "category_n": category_n,
+            "class_labels": class_label,
+            "track_category_n": track_category_n,
+            "track_labels": track_label,
+        }
 
 
 class MusicMetricDatamodule(pl.LightningDataModule):
@@ -226,17 +242,18 @@ class MusicMetricDatamodule(pl.LightningDataModule):
         self.df.path = self.tensor_dir + self.df.path
         self.bg = np.random.default_rng(self.random_state)
         self.is_setup = True
-    
+
     def train_dataloader(self, dataset_idx, batch_size=None):
         batch_size = batch_size or self.batch_size
 
         dataset = CategorySpecificDataset(
             self.df[self.df.category_n == dataset_idx],
             "train",
-            self.transforms(),
-            self.val_size,
-            self.test_size,
-            self.random_state,
+            category_n=dataset_idx,
+            transform=self.transforms(),
+            val_size=self.val_size,
+            test_size=self.test_size,
+            random_state=self.random_state,
         )
 
         sampler = ClassThenInstanceSampler(
@@ -260,11 +277,12 @@ class MusicMetricDatamodule(pl.LightningDataModule):
 
         dataset = CategorySpecificDataset(
             self.df[self.df.category_n == dataset_idx],
-            "train",
-            self.transforms(),
-            self.val_size,
-            self.test_size,
-            self.random_state,
+            "val",
+            category_n=dataset_idx,
+            transform=self.transforms(),
+            val_size=self.val_size,
+            test_size=self.test_size,
+            random_state=self.random_state,
         )
 
         sampler = ClassThenInstanceSampler(
@@ -288,11 +306,12 @@ class MusicMetricDatamodule(pl.LightningDataModule):
 
         dataset = CategorySpecificDataset(
             self.df[self.df.category_n == dataset_idx],
-            "train",
-            self.transforms(),
-            self.val_size,
-            self.test_size,
-            self.random_state,
+            "test",
+            category_n=dataset_idx,
+            transform=self.transforms(),
+            val_size=self.val_size,
+            test_size=self.test_size,
+            random_state=self.random_state,
         )
 
         sampler = ClassThenInstanceSampler(
