@@ -1,15 +1,19 @@
 import os
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 from sklearn.model_selection import train_test_split
+from torch._C import ClassType
+from torch.utils.data.sampler import Sampler
 from music_metric_learning.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import Compose
+
+from music_metric_learning.samplers.per_class import ClassThenInstanceSampler
 
 
 def make_np(x):
@@ -51,6 +55,15 @@ class InverseMELNormalize(MELNormalize):
 
     def forward(self, sgrams: torch.Tensor):
         return super().forward(sgrams.clone())
+
+
+class Identity(nn.Module):
+    def __init__(self) -> None:
+        """For a do nothing transform."""
+        super().__init__()
+
+    def forward(self, x: torch.Tensor):
+        return x
 
 
 def prepare_tensors_from_data(
@@ -106,8 +119,8 @@ class CategorySpecificDataset(Dataset):
         across all datasets.
 
         Arguments:
-            df {pd.DataFrame} -- DataFrame containing data paths and labels, created by 
-            `make_combined_tensor_df` with only a single category and with full paths to tensors 
+            df {pd.DataFrame} -- DataFrame containing data paths and labels, created by
+            `make_combined_tensor_df` with only a single category and with full paths to tensors
             in the `path` column
             split -- one of 'train, 'test', or 'val'
             transform {Optional[nn.Module]} -- transform to apply to tensor
@@ -137,24 +150,25 @@ class CategorySpecificDataset(Dataset):
             train, test_size=self.val_size, random_state=self.random_state
         )
         if self.split == "train":
-            self.idxs = train
+            self.df = self.df.iloc[train, :]
         elif self.split == "val":
-            self.idxs = val
+            self.df = self.df.iloc[val, :]
         elif self.split == "test":
-            self.idxs = test
+            self.df = self.df.iloc[test, :]
+        self.df = self.df.reset_index(drop=True)
 
     def __len__(self):
-        return len(self.idxs)
+        return len(self.df)
 
     def __getitem__(
         self, index: Union[torch.Tensor, int]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if isinstance(index, torch.Tensor):
-            idx = index.item()
+            idx = int(index.item())
         else:
             idx = index
 
-        item = self.df.iloc[self.idxs[idx]]
+        item = self.df.iloc[idx]
         left: torch.Tensor
         right: torch.Tensor
         left, right = torch.load(item.path)
@@ -172,8 +186,128 @@ class CategorySpecificDataset(Dataset):
         else:
             selector = 0
         images = torch.stack(((left, right)[selector], (left, right)[1 - selector]))
+        images = images.unsqueeze(1)  # Add channel dimension
 
-        return (images, class_label, track_label)
+        return images, class_label, track_label
+
+
+class MusicMetricDatamodule(pl.LightningDataModule):
+    def __init__(
+        self,
+        dataset_csv: str,
+        tensor_dir: str,
+        m_per_class: int,
+        batch_size: int = 128,
+        test_size: Union[float, int] = 1024,
+        val_size: Union[float, int] = 1024,
+        transforms: Optional[Union[Type[MELNormalize], Type[nn.Module]]] = MELNormalize,
+        random_state: Union[int, np.random.Generator] = 42,
+        num_workers: int = 2,
+        pin_memory: bool = True,
+    ):
+        super().__init__()
+        self.csv = dataset_csv
+        self.m_per_class = m_per_class
+        self.tensor_dir = tensor_dir
+        self.batch_size = batch_size
+        self.test_size = test_size
+        self.val_size = val_size
+        if transforms is None:
+            self.transform = Identity
+        else:
+            self.transforms = transforms
+        self.random_state = random_state
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+
+    def setup(self, stage=None):
+        self.df = pd.read_csv(self.csv)
+        self.df.path = self.tensor_dir + self.df.path
+        self.bg = np.random.default_rng(self.random_state)
+    
+    def train_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+
+        dataset = CategorySpecificDataset(
+            self.df[self.df.category_n == dataset_idx],
+            "train",
+            self.transforms(),
+            self.val_size,
+            self.test_size,
+            self.random_state,
+        )
+
+        sampler = ClassThenInstanceSampler(
+            labels=dataset.df.label_n,
+            m_per_class=self.m_per_class,
+            batch_size=batch_size,
+            generator=self.bg,
+            use_length=100_000,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            sampler=sampler,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
+
+    def val_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+
+        dataset = CategorySpecificDataset(
+            self.df[self.df.category_n == dataset_idx],
+            "train",
+            self.transforms(),
+            self.val_size,
+            self.test_size,
+            self.random_state,
+        )
+
+        sampler = ClassThenInstanceSampler(
+            labels=dataset.df.label_n,
+            m_per_class=self.m_per_class,
+            batch_size=batch_size,
+            generator=self.bg,
+            use_length=100_000,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            sampler=sampler,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
+
+    def test_dataloader(self, dataset_idx, batch_size=None):
+        batch_size = batch_size or self.batch_size
+
+        dataset = CategorySpecificDataset(
+            self.df[self.df.category_n == dataset_idx],
+            "train",
+            self.transforms(),
+            self.val_size,
+            self.test_size,
+            self.random_state,
+        )
+
+        sampler = ClassThenInstanceSampler(
+            labels=dataset.df.label_n,
+            m_per_class=self.m_per_class,
+            batch_size=batch_size,
+            generator=self.bg,
+            use_length=100_000,
+        )
+
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            sampler=sampler,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+        )
 
 
 class TripletDataset(Dataset):
@@ -214,7 +348,7 @@ class TripletDataset(Dataset):
             self.idxs = test
 
     def __len__(self):
-        return self.idxs.shape[0]
+        return self.df.shape[0]
 
     def __getitem__(
         self, idx: Union[torch.Tensor, int]
@@ -222,7 +356,7 @@ class TripletDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.item()  # type: ignore
 
-        item = self.df.iloc[self.idxs[idx]]
+        item = self.df.iloc[idx]
         left, right = torch.load(item.path)
         label = torch.tensor(item.label_n, dtype=torch.long)  # type: ignore
 
