@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Dict, Literal, Optional, Union, cast
+from typing import Dict, Literal, Optional, Tuple, Union, cast
 
 from music_metric_learning.modules.mobilenet import MobileNetEncoder
 from music_metric_learning.modules.inception import InceptionEncoder
@@ -198,10 +198,11 @@ def copy_parameters(
         ):
             param_k.data = param_k.data * momentum + param_q.data * (1.0 - momentum)
 
+
 @torch.no_grad()
-def batch_shuffle_single_gpu(x):
+def batch_shuffle_single_gpu(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Batch shuffle, for making use of BatchNorm on a single gpu to avoid 
+    Batch shuffle, for making use of BatchNorm on a single gpu to avoid
     "leaking" information between keys and queries.
     Taken from: https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/MoCoCIFAR10.ipynb
     """
@@ -211,8 +212,11 @@ def batch_shuffle_single_gpu(x):
     idx_unshuffle = torch.argsort(idx_shuffle)
     return x[idx_shuffle], idx_unshuffle
 
+
 @torch.no_grad()
-def batch_unshuffle_single_gpu(x, idx_unshuffle):
+def batch_unshuffle_single_gpu(
+    x: torch.Tensor, idx_unshuffle: torch.Tensor
+) -> torch.Tensor:
     """
     Undo batch shuffle.
     """
