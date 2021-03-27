@@ -23,10 +23,12 @@ def cosine_similarity_matrix(embeddings: torch.Tensor) -> torch.Tensor:
 def keyed_cosine_similarity_matrix(
     query_embeddings: torch.Tensor, key_embeddings: torch.Tensor
 ) -> torch.Tensor:
-    """Like `cosine_similarity_matrix`, but for separate query (anchor) and key (positive/negative) embeddings
+    """Like `cosine_similarity_matrix`, but for separate query (anchor) and key 
+    (positive/negative) embeddings
 
     Arguments:
-        query_embeddings {query_embeddings} -- Does not need to be normalized (batch_size, embeddings_dim)
+        query_embeddings {query_embeddings} -- Does not need to be normalized (batch_size, 
+        embeddings_dim)
         key_embeddings {key_embeddings} -- Does not need to be normalized (key_size, embeddings_dim)
 
 
@@ -40,8 +42,8 @@ def keyed_cosine_similarity_matrix(
 
 
 def same_label_mask(labels: torch.Tensor) -> torch.Tensor:
-    """Returns a symmetric boolean mask indicating where pairwise labels are the same. An instance is
-    considered to not share a label with itself, so the diagonal is false
+    """Returns a symmetric boolean mask indicating where pairwise labels are the same. An instance 
+    is considered to not share a label with itself, so the diagonal is false
 
     Arguments:
         labels {torch.Tensor} -- long tensor containing labels (batch_size,)
