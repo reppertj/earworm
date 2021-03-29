@@ -1,15 +1,23 @@
 import os
 import random
-from typing import Dict, Literal, Optional, Tuple, Union, cast
+from typing import Dict, Optional, Tuple, Union, cast
 
-from music_metric_learning.modules.mobilenet import MobileNetEncoder
-from music_metric_learning.modules.inception import InceptionEncoder
+from music_metric_learning.data.dataset import CategorySpecificDataset
+
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal  # type: ignore
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch import nn
 import umap
+from music_metric_learning.losses.contrastive import (
+    ContrastiveLoss, SelectivelyContrastiveLoss)
+from music_metric_learning.modules.inception import InceptionEncoder
+from music_metric_learning.modules.mobilenet import MobileNetEncoder
+from torch import nn
 
 
 def seed_everything(seed: int = 42) -> int:
@@ -93,6 +101,7 @@ def visualizer_hook(
     for i, fl in enumerate(friendly_labels):
         idxs = labels == label_types[i]
         ax.plot(x[idxs], y[idxs], ".", markersize=2, label=fl)
+
     plt.legend(
         bbox_to_anchor=(1.01, 1.0),
         loc="upper left",
@@ -202,14 +211,15 @@ def copy_parameters(
 @torch.no_grad()
 def batch_shuffle_single_gpu(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Batch shuffle, for making use of BatchNorm on a single gpu to avoid
-    "leaking" information between keys and queries.
+    Batch shuffle, for making use of typical BatchNorm multi-gpu behavior on a single gpu to avoid
+    "leaking" information through the BN parameters.
     Taken from: https://github.com/KevinMusgrave/pytorch-metric-learning/blob/master/examples/notebooks/MoCoCIFAR10.ipynb
     """
     # random shuffle index
-    idx_shuffle = torch.randperm(x.shape[0]).cuda()
+    idx_shuffle = torch.randperm(x.shape[0]).to(device=x.device)
     # index for restoring
     idx_unshuffle = torch.argsort(idx_shuffle)
+    idx_unshuffle = idx_unshuffle.to(dtype=torch.long)
     return x[idx_shuffle], idx_unshuffle
 
 
@@ -218,6 +228,6 @@ def batch_unshuffle_single_gpu(
     x: torch.Tensor, idx_unshuffle: torch.Tensor
 ) -> torch.Tensor:
     """
-    Undo batch shuffle.
+    Undo batch shuffle operation.
     """
     return x[idx_unshuffle]
