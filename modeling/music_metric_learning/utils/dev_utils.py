@@ -1,6 +1,7 @@
-import sys
 import gc
+import sys
 from typing import Tuple
+
 import torch
 from torch import nn
 
@@ -18,10 +19,9 @@ def add_shape_hook(input: torch.Tensor, network: nn.Module):
             add_shape_hook(input, layer)
         else:
             layer.register_forward_hook(hook_fn)
-            
 
 
-class debug_cuda_context():
+class debug_cuda_context:
     """ Debug context to print cuda allocation between calls inside the context """
 
     def __init__(self, name):
@@ -29,22 +29,25 @@ class debug_cuda_context():
         self.objects = self.new_objects
 
     def __enter__(self):
-        print('Entering Cuda Debug Decorated func')
+        print("Entering Cuda Debug Decorated func")
         # Set the trace function to the trace_calls function
         # So all events are now traced
-        sys.settrace(self.trace_calls)
+        try:
+            sys.settrace(self.trace_calls)
+        except TypeError as e:
+            print(f"Cannot trace due to TypeError: {e}")
 
     def __exit__(self, *args, **kwargs):
         # Stop tracing all events
         sys.settrace = None
 
-    def trace_calls(self, frame, event, arg): 
-        if event != 'call':
+    def trace_calls(self, frame, event, arg):
+        if event != "call":
             return
         elif frame.f_code.co_name != self.name:
             return
         return self.trace_lines
-    
+
     @property
     def new_objects(self):
         if not hasattr(self, "objects"):
@@ -54,23 +57,21 @@ class debug_cuda_context():
             new_objects = current_objects.difference(self.objects)
             self.objects = current_objects
             return new_objects
-            
+
     def get_objects(self):
         objects = set()
         for obj in gc.get_objects():
             try:
-                if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                if torch.is_tensor(obj) or (
+                    hasattr(obj, "data") and torch.is_tensor(obj.data)
+                ):
                     objects.add(obj)
             except:
                 pass
         return objects
 
     def trace_lines(self, frame, event, arg):
-        # If you want to print local variables each line
-        # keep the check for the event 'line'
-        # If you want to print local variables only on return
-        # check only for the 'return' event
-        if event not in ['line', 'return']:
+        if event not in ["line", "return"]:
             return
         co = frame.f_code
         func_name = co.co_name
@@ -80,17 +81,20 @@ class debug_cuda_context():
         GB = float(1024 ** 3)
         torch.cuda.synchronize()
         allocated = torch.cuda.memory_allocated()
-        print (' {0} {1} {2} allocated: {3:.4f} GB'.format(func_name, 
-                                                  event,
-                                                  line_no, 
-                                                  allocated / GB))
+        print(
+            " {0} {1} {2} allocated: {3:.4f} GB".format(
+                func_name, event, line_no, allocated / GB
+            )
+        )
         print("   New tensor allocations:")
 
         for obj in self.new_objects:
             print("   ", type(obj), obj.size())
-        
+
+
 def debug_cuda(func):
     """ Debug decorator to call the function within the debug context """
+
     def decorated_func(*args, **kwargs):
         context = debug_cuda_context(func.__name__)
         context.__enter__()
@@ -103,10 +107,10 @@ def debug_cuda(func):
             raise e
         context.__exit__()
         return return_value
+
     return decorated_func
+
 
 def delete(*objs):
     for obj in objs:
-        del obj    
-
-
+        del obj
