@@ -1,13 +1,16 @@
 import os
-from typing import Dict, List, Literal, Optional, Tuple, Type, Union, TypedDict
+from typing import Dict, List, Optional, Tuple, Union
+try:
+    from typing import Literal, TypedDict, Type
+except ImportError:
+    from typing_extensions import Literal, TypedDict, Type  # type: ignore
+
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 from sklearn.model_selection import train_test_split
-from torch._C import ClassType
-from torch.utils.data.sampler import Sampler
 from music_metric_learning.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
@@ -213,17 +216,19 @@ class MusicMetricDatamodule(pl.LightningDataModule):
         dataset_csv: str,
         tensor_dir: str,
         m_per_class: int,
+        epoch_length: int = 20000,
         batch_size: int = 128,
         test_size: Union[float, int] = 1024,
         val_size: Union[float, int] = 1024,
         transforms: Optional[Union[Type[MELNormalize], Type[nn.Module]]] = MELNormalize,
         random_state: Union[int, np.random.Generator] = 42,
-        num_workers: int = 2,
+        num_workers: int = 1,
         pin_memory: bool = True,
     ):
         super().__init__()
         self.csv = dataset_csv
         self.m_per_class = m_per_class
+        self.epoch_length = epoch_length
         self.tensor_dir = tensor_dir
         self.batch_size = batch_size
         self.test_size = test_size
@@ -261,7 +266,7 @@ class MusicMetricDatamodule(pl.LightningDataModule):
             m_per_class=self.m_per_class,
             batch_size=batch_size,
             generator=self.bg,
-            use_length=100_000,
+            use_length=self.epoch_length,
         )
 
         return DataLoader(
@@ -290,7 +295,7 @@ class MusicMetricDatamodule(pl.LightningDataModule):
             m_per_class=self.m_per_class,
             batch_size=batch_size,
             generator=self.bg,
-            use_length=100_000,
+            use_length=self.epoch_length,
         )
 
         return DataLoader(
@@ -319,7 +324,7 @@ class MusicMetricDatamodule(pl.LightningDataModule):
             m_per_class=self.m_per_class,
             batch_size=batch_size,
             generator=self.bg,
-            use_length=100_000,
+            use_length=self.epoch_length,
         )
 
         return DataLoader(
