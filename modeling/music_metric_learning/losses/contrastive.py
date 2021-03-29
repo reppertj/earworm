@@ -1,7 +1,17 @@
-from typing import Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple, Union
+
+import numpy as np
+from pytorch_metric_learning.utils.common_functions import neg_inf
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
+from pytorch_metric_learning.losses.contrastive_loss import (
+    ContrastiveLoss as PMLContrastiveLoss,
+)
+from pytorch_metric_learning.distances.dot_product_similarity import (
+    DotProductSimilarity as PMLDotProductSimilarity,
+)
+from pytorch_metric_learning.utils.loss_and_miner_utils import get_all_pairs_indices
 
 
 def cosine_similarity_matrix(embeddings: torch.Tensor) -> torch.Tensor:
@@ -23,11 +33,11 @@ def cosine_similarity_matrix(embeddings: torch.Tensor) -> torch.Tensor:
 def keyed_cosine_similarity_matrix(
     query_embeddings: torch.Tensor, key_embeddings: torch.Tensor
 ) -> torch.Tensor:
-    """Like `cosine_similarity_matrix`, but for separate query (anchor) and key 
+    """Like `cosine_similarity_matrix`, but for separate query (anchor) and key
     (positive/negative) embeddings
 
     Arguments:
-        query_embeddings {query_embeddings} -- Does not need to be normalized (batch_size, 
+        query_embeddings {query_embeddings} -- Does not need to be normalized (batch_size,
         embeddings_dim)
         key_embeddings {key_embeddings} -- Does not need to be normalized (key_size, embeddings_dim)
 
@@ -42,7 +52,7 @@ def keyed_cosine_similarity_matrix(
 
 
 def same_label_mask(labels: torch.Tensor) -> torch.Tensor:
-    """Returns a symmetric boolean mask indicating where pairwise labels are the same. An instance 
+    """Returns a symmetric boolean mask indicating where pairwise labels are the same. An instance
     is considered to not share a label with itself, so the diagonal is false
 
     Arguments:
@@ -96,9 +106,7 @@ def mine_easy_positives(
     distances = (
         distances.clone().detach()
     )  # We'll modify this, and it's not needed for backprop from here forward
-    distances[
-        ~same_label_mask
-    ] = -1  # Only consider positive pairings
+    distances[~same_label_mask] = -1  # Only consider positive pairings
     distances[distances > 0.9999] = 1  # For numerical reasons?
     pos_maxes, pos_max_idxs = distances.max(dim=1)  # (batch_size,)
     pos_maxes_valid_mask = (pos_maxes > -1) & (
@@ -132,7 +140,13 @@ def mine_hard_negatives(
 
 
 class SelectivelyContrastiveLoss(nn.Module):
-    def __init__(self, hn_lambda: float = 1.0, temperature: float = 0.1, hard_cutoff: float = 0.8):
+    def __init__(
+        self,
+        hn_lambda: float = 1.0,
+        temperature: float = 0.1,
+        hard_cutoff: float = 0.8,
+        xent_only: bool = False,
+    ):
         """Selectively contrastive loss, from https://arxiv.org/pdf/2007.12749.pdf
         See reference implementation at https://github.com/littleredxh/HardNegative/blob/master/_code/Loss.py
 
@@ -146,6 +160,7 @@ class SelectivelyContrastiveLoss(nn.Module):
         self.hn_lambda = hn_lambda
         self.temperature = temperature
         self.hard_cutoff = hard_cutoff
+        self.xent_only = xent_only
 
     def forward(
         self,
@@ -153,6 +168,7 @@ class SelectivelyContrastiveLoss(nn.Module):
         labels: torch.Tensor,
         key_embeddings: Optional[torch.Tensor] = None,
         key_labels: Optional[torch.Tensor] = None,
+        log_callback: Optional[Callable] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return the selectively contrastive loss for a batch of embeddings and labels, using the
         cosine similarity as the distance metric.
@@ -189,22 +205,75 @@ class SelectivelyContrastiveLoss(nn.Module):
         combined_valid_mask = pos_maxes_valid_mask & neg_maxes_valid_mask
 
         hard_triplet_mask = (
-            (hard_negative_scores > easy_positive_scores) | (hard_negative_scores > self.hard_cutoff)
+            (hard_negative_scores > easy_positive_scores)
+            | (hard_negative_scores > self.hard_cutoff)
         ) & combined_valid_mask
 
         easy_triplet_mask = (
-            (hard_negative_scores < easy_positive_scores) & (hard_negative_scores < self.hard_cutoff)
+            (hard_negative_scores < easy_positive_scores)
+            & (hard_negative_scores < self.hard_cutoff)
         ) & combined_valid_mask
 
-        hard_triplet_loss = hard_negative_scores[
-            hard_triplet_mask
-        ].sum()  # This is the contrastive loss from the paper
         triplets = torch.stack((easy_positive_scores, hard_negative_scores), dim=1)
-        easy_triplet_loss = -F.log_softmax(triplets[easy_triplet_mask, :] / self.temperature, dim=1)[
-            :, 0
-        ].sum()
-        n_triplets = hard_triplet_mask.float().sum() + easy_triplet_mask.float().sum()
-        if n_triplets == 0:
-            n_triplets = 1
-        loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
+
+        if not self.xent_only:
+            hard_triplet_loss = hard_negative_scores[
+                hard_triplet_mask
+            ].sum()  # This is the contrastive loss from the paper
+            easy_triplet_loss = -F.log_softmax(
+                triplets[easy_triplet_mask, :] / self.temperature, dim=1
+            )[:, 0].sum()
+            n_triplets = (
+                hard_triplet_mask.float().sum() + easy_triplet_mask.float().sum()
+            )
+            if n_triplets == 0:
+                n_triplets = 1
+            loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
+        else:
+            loss = -F.log_softmax(
+                triplets[combined_valid_mask, :] / self.temperature, dim=1
+            )[:, 0].mean()
+
+        if log_callback is not None:
+            logging_dict: Dict[str, Union[torch.Tensor, np.ndarray, int, float]] = {}
+            positive_log = easy_positive_scores.clone().detach().cpu().numpy()
+            logging_dict["easy_positive_scores"] = positive_log
+            logging_dict["mean_easy_positive"] = np.mean(positive_log)
+            negative_log = hard_negative_scores.clone().detach().cpu().numpy()
+            logging_dict["hard_negative_scores"] = negative_log
+            logging_dict["mean_hard_negative"] = np.mean(negative_log)
+            logging_dict["hn_ratio"] = (
+                ((hard_negative_scores > easy_positive_scores)[combined_valid_mask])
+                .clone()
+                .detach()
+                .float()
+                .mean()
+                .cpu()
+            )
+            logging_dict["n_valid_hard"] = hard_triplet_mask.detach().float().sum()
+            logging_dict["n_valid_easy"] = easy_triplet_mask.detach().float().sum()
+
+            log_callback(logging_dict)
+
         return loss, triplets
+
+
+class ContrastiveLoss(nn.Module):
+    def __init__(self, pos_margin: float = 1.0, neg_margin: float = 0.0):
+        super().__init__()
+        self.criterion = PMLContrastiveLoss(
+            pos_margin=pos_margin,
+            neg_margin=neg_margin,
+            distance=PMLDotProductSimilarity(normalize_embeddings=True),
+        )
+
+    def forward(
+        self,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        key_embeddings: Optional[torch.Tensor] = None,
+        key_labels: Optional[torch.Tensor] = None,
+    ):
+        all_pairs = get_all_pairs_indices(labels, key_labels)
+
+        return self.criterion.compute_loss(embeddings, labels)
