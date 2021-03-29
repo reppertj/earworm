@@ -4,7 +4,7 @@ import pandas as pd
 from music_metric_learning.data.dataset import (
     CategorySpecificDataset,
     InverseMELNormalize,
-    MELNormalize, MusicMetricDatamodule,
+    MELNormalize, MusicBatchPart, MusicMetricDatamodule,
 )
 
 
@@ -27,6 +27,7 @@ def test_dataset(tensor_dir: str, train_csv: os.PathLike):
         dataset = CategorySpecificDataset(
             df,
             split="train",
+            category_n=category_n,
             transform=None,
             val_size=0.1,
             test_size=0.1,
@@ -34,9 +35,12 @@ def test_dataset(tensor_dir: str, train_csv: os.PathLike):
         )
         n_items = int(int(len(df) * 0.9) * 0.9)
         assert len(dataset) == n_items
-        image, c_lab, t_lab = dataset[0]
-        assert len(image.shape) == 4
-        assert image.shape[0:2] == (2, 1)
+        batch_dict: MusicBatchPart = dataset[0]
+        images = batch_dict["images"]
+        c_lab = batch_dict["category_n"]
+        t_lab = batch_dict["track_labels"]
+        assert len(images.shape) == 4
+        assert images.shape[0:2] == (2, 1)
         assert c_lab.shape == tuple()
         assert t_lab.shape == tuple()
 
@@ -48,7 +52,10 @@ def test_datamodule(tensor_dir: str, train_csv: os.PathLike):
     dm.setup()
     def category_closure(category_n):
         loader = dm.train_dataloader(category_n)
-        tensors, labels, track_labels = next(iter(loader))
+        batch_part: MusicBatchPart = next(iter(loader))
+        tensors = batch_part["images"]
+        labels = batch_part["class_labels"]
+        track_labels = batch_part["track_labels"]
         assert tensors.shape[:3] == (64, 2, 1)
         assert labels.shape == (64,)
         assert track_labels.shape == (64,)
