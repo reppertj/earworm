@@ -49,7 +49,7 @@ def train_csv(tmpdir_factory, tensor_dir, audioset_json, audioset_csv):
 @pytest.fixture(scope="session")
 def datamodule(train_csv, tensor_dir):
     dm = MusicMetricDatamodule(
-        dataset_csv=train_csv, tensor_dir=tensor_dir, m_per_class=2, random_state=42
+        dataset_csv=train_csv, tensor_dir=tensor_dir, m_per_class=2, random_state=42, pin_memory=False,
     )
     dm.setup()
     return dm
