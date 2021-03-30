@@ -153,3 +153,14 @@ def test_keyed_selectively_contrastive_loss():
     ).sum()
     manual_loss = (easy_triplet_loss + criterion.hn_lambda * hard_triplet_loss) / 6.0 
     assert torch.allclose(loss, manual_loss)
+
+def test_cross_entropy_loss():
+    criterion = SelectivelyContrastiveLoss(xent_only=True, softmax_all=True)
+    embeddings = torch.tensor(
+        [angle_to_coord(float(a)) for a in [10, 15, 25, 35, 40, 80]]
+    )
+    labels = torch.tensor([0, 0, 1, 1, 2, 2])
+    key_embeddings = torch.tensor(
+        [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
+    )
+    loss, _ = criterion(embeddings, labels, key_embeddings, labels)

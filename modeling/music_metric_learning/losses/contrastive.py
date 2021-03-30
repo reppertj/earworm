@@ -116,7 +116,7 @@ def mine_easy_positives(
 
 
 def mine_hard_negatives(
-    distances: torch.Tensor, same_label_mask: torch.Tensor
+    distances: torch.Tensor, same_mask: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Mine the highest scoring negative instance for each anchor, along with a mask indicating
     positions where that score was either 1 or -1, or where there were no negative instances.
@@ -133,8 +133,8 @@ def mine_hard_negatives(
     distances = (
         distances.clone().detach()
     )  # We'll modify this, and it's not needed for backprop from here forward
-    distances[same_label_mask] = -1  # Only consider negative pairings
-    neg_maxes, neg_max_idxs = distances.max(1)  # (batch_size,)
+    distances[same_mask] = -1  # Only consider negative pairings
+    neg_maxes, neg_max_idxs = distances.max(dim=1)  # (batch_size,)
     neg_maxes_valid_mask = (neg_maxes > -1) & (neg_maxes < 1)
     return neg_max_idxs, neg_maxes_valid_mask
 
@@ -146,6 +146,9 @@ class SelectivelyContrastiveLoss(nn.Module):
         temperature: float = 0.1,
         hard_cutoff: float = 0.8,
         xent_only: bool = False,
+        softmax_all: bool = False,
+        bce_all: bool = False,
+        label_smoothing_epsilon: float = 0.1,
     ):
         """Selectively contrastive loss, from https://arxiv.org/pdf/2007.12749.pdf
         See reference implementation at https://github.com/littleredxh/HardNegative/blob/master/_code/Loss.py
@@ -155,12 +158,17 @@ class SelectivelyContrastiveLoss(nn.Module):
             temperature: temperature hyperparamter for NCXEnt loss
             hard_cutoff: above this threshold for cosine similarity, negative examples will be
             considered hard even if the easiest example is closer
+            xent_only: don't use the selection function; just use the InfoNCE loss
+            softmax_all: if using InfoNCE loss, use all negative pairs for the loss
         """
         super().__init__()
         self.hn_lambda = hn_lambda
         self.temperature = temperature
         self.hard_cutoff = hard_cutoff
         self.xent_only = xent_only
+        self.softmax_all = softmax_all
+        self.bce_all = bce_all
+        self.label_smoothing_epsilon = label_smoothing_epsilon
 
     def forward(
         self,
@@ -230,18 +238,40 @@ class SelectivelyContrastiveLoss(nn.Module):
                 n_triplets = 1
             loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
         else:
-            loss = -F.log_softmax(
-                triplets[combined_valid_mask, :] / self.temperature, dim=1
-            )[:, 0].mean()
+            if self.bce_all:
+                false_prob = torch.tensor(self.label_smoothing_epsilon, dtype=distances.dtype, device=distances.device)
+                true_prob = 1 - false_prob
+                ground_truth = torch.where(same_mask, true_prob, false_prob)
+                loss = F.binary_cross_entropy_with_logits(distances, ground_truth)
+
+            elif self.softmax_all:
+                distances[same_mask] = torch.finfo(
+                    distances.dtype
+                ).min  # set anchor-positives in anchor-negative space to negative infinity
+                # logits have shape (query_size - n_invalid_positives, 1 + n_key_embeddings)
+                logits = torch.cat(
+                    [
+                        easy_positive_scores[pos_maxes_valid_mask].unsqueeze(1),
+                        distances[pos_maxes_valid_mask, :],
+                    ],
+                    dim=1,
+                ) / self.temperature
+                # Positive pairs have label 0 for cross-entropy loss
+                ground_truth = torch.zeros(
+                    logits.shape[0], dtype=torch.long, device=logits.device
+                )
+                loss = F.cross_entropy(logits, ground_truth)
+            else:
+                loss = -F.log_softmax(
+                    triplets[combined_valid_mask, :] / self.temperature, dim=1
+                )[:, 0].mean()
 
         if log_callback is not None:
             logging_dict: Dict[str, Union[torch.Tensor, np.ndarray, int, float]] = {}
             positive_log = easy_positive_scores.clone().detach().cpu().numpy()
-            logging_dict["easy_positive_scores"] = positive_log
-            logging_dict["mean_easy_positive"] = np.mean(positive_log)
+            logging_dict["mean_easy_positive"] = max(-1, min(1, np.mean(positive_log)))
             negative_log = hard_negative_scores.clone().detach().cpu().numpy()
-            logging_dict["hard_negative_scores"] = negative_log
-            logging_dict["mean_hard_negative"] = np.mean(negative_log)
+            logging_dict["mean_hard_negative"] = max(-1, min(1, np.mean(negative_log)))
             logging_dict["hn_ratio"] = (
                 ((hard_negative_scores > easy_positive_scores)[combined_valid_mask])
                 .clone()
@@ -259,13 +289,9 @@ class SelectivelyContrastiveLoss(nn.Module):
 
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, pos_margin: float = 1.0, neg_margin: float = 0.0):
+    def __init__(self, temperature: float = 0.7):
         super().__init__()
-        self.criterion = PMLContrastiveLoss(
-            pos_margin=pos_margin,
-            neg_margin=neg_margin,
-            distance=PMLDotProductSimilarity(normalize_embeddings=True),
-        )
+        self.temperature = temperature
 
     def forward(
         self,
@@ -274,6 +300,22 @@ class ContrastiveLoss(nn.Module):
         key_embeddings: Optional[torch.Tensor] = None,
         key_labels: Optional[torch.Tensor] = None,
     ):
-        all_pairs = get_all_pairs_indices(labels, key_labels)
+        if key_embeddings is None:
+            assert key_labels is None
+            key_embeddings = embeddings
+            key_labels = labels
+        else:
+            assert key_labels is not None
 
-        return self.criterion.compute_loss(embeddings, labels)
+        # b for batch size, d for embedding dimension, k for number of keys
+        positive_logits = torch.einsum(
+            "bd,bd->b", [embeddings, key_embeddings]
+        ).unsqueeze(-1)
+        negative_logits = torch.einsum(
+            "bd,dk->bk",
+            [
+                embeddings,
+            ],
+        )
+
+        return None
