@@ -290,18 +290,10 @@ class MusicMetricDatamodule(pl.LightningDataModule):
             random_state=self.random_state,
         )
 
-        sampler = ClassThenInstanceSampler(
-            labels=dataset.df.label_n,
-            m_per_class=self.m_per_class,
-            batch_size=batch_size,
-            generator=self.bg,
-            use_length=self.epoch_length,
-        )
-
         return DataLoader(
             dataset,
             batch_size=batch_size,
-            sampler=sampler,
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
@@ -319,18 +311,10 @@ class MusicMetricDatamodule(pl.LightningDataModule):
             random_state=self.random_state,
         )
 
-        sampler = ClassThenInstanceSampler(
-            labels=dataset.df.label_n,
-            m_per_class=self.m_per_class,
-            batch_size=batch_size,
-            generator=self.bg,
-            use_length=self.epoch_length,
-        )
-
         return DataLoader(
             dataset,
             batch_size=batch_size,
-            sampler=sampler,
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
