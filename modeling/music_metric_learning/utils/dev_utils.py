@@ -76,8 +76,6 @@ class debug_cuda_context:
         co = frame.f_code
         func_name = co.co_name
         line_no = frame.f_lineno
-        filename = co.co_filename
-        local_vars = frame.f_locals
         GB = float(1024 ** 3)
         torch.cuda.synchronize()
         allocated = torch.cuda.memory_allocated()
