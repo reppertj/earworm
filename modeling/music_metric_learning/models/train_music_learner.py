@@ -30,34 +30,31 @@ from umap import UMAP
 from sklearn.manifold import TSNE
 
 DEFAULT_HPARAMS = {
-    "optimizer": "adabound",  # "sgd", "asgd", "adam"
+    "optimizer": "sgd",  # "sgd", "asgd", "adam"
     "learning_rate": 0.001,
     "final_learning_rate": 0.01,
     "momentum": 0.9,
-    "batch_size": 384,
-    "epoch_length": 20_000,
-    "m_per_class": 2,
+    "batch_size": 512,
+    "epoch_length": 100_000,
+    "dropout": 0.5,
+    "m_per_class": 32,
     "embedding_dim": 256,
-    "category_embedding_dim": 64,
+    "category_embedding_dim": 32,
     "encoder": "mobilenet",
     "encoder_params": {
         "pretrained": True,
         "freeze_weights": False,
         "max_pool": True,
     },
-    "loss_func": "selective",  # "xent"
+    "loss_func": "xent_all",  # "selective", "xent_all", "softmax_only"
     "loss_params": {
-        "track_loss_alpha": 1.0,
+        "track_loss_alpha": 0.5,
         "hn_lambda": 1.0,
         "temperature": 0.1,
         "hard_margin": 0.8,
-        "angular_margin": 28.6,  # in degrees (=0.5 radians)
-        "scale": 64,
-        "pos_margin": 1.0,  # Metric is cosine similarity, so higher is closer
-        "neg_margin": 0.0,
     },
-    "key_encoder_momentum": 0.999,
-    "queue_size": 32768,
+    "key_encoder_momentum": 0.99,
+    "queue_size": (512 * 70),
     "checkpoint_path": "model_checkpoints",
 }
 
@@ -93,6 +90,7 @@ class MusicMetricLearner(pl.LightningModule):
             category_embedding_dim=conf.category_embedding_dim,
             out_dim=conf.embedding_dim,
             normalize_embeddings=False,  # We'll normalize in the loss function
+            dropout=conf.dropout
         )
 
         ### Instantiate Model Copy for MoCo Track Queue ###
@@ -127,19 +125,23 @@ class MusicMetricLearner(pl.LightningModule):
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         self.queue_ptr: torch.Tensor
 
-        ### Create Category Label Buffers for the Queue ###
+        ### Create Category Label Buffers for the Queue, inited to -1, meaning missing ###
         for i in range(4):
             self.register_buffer(f"queue_{i}_labels", torch.full_like(self.queue_labels, -1))
 
         ### Instantiate Loss Function ###
         loss_func = self.hparams.loss_func  # type: ignore
-        if loss_func in ["selective", "xent"]:
-            xent_only = True if loss_func == "xent" else False
+        if loss_func in ["selective", "xent", "xent_all", "bce"]:
+            xent_only = True if loss_func in ["xent", "xent_all", "bce"] else False
+            bce_all = True if loss_func == "bce" else False
+            softmax_all = True if loss_func == "xent_all" else False
             self.criterion = SelectivelyContrastiveLoss(
                 hn_lambda=cast(float, self.hparams.loss_params.hn_lambda),  # type: ignore
                 temperature=cast(float, self.hparams.loss_params.temperature),  # type: ignore
                 hard_cutoff=cast(float, self.hparams.loss_params.hard_margin),  # type: ignore
                 xent_only=xent_only,
+                softmax_all=softmax_all,
+                bce_all=bce_all,
             )
         else:
             raise ValueError("Loss function f{loss_func} not implemented")
@@ -228,7 +230,8 @@ class MusicMetricLearner(pl.LightningModule):
         """
         key_embeddings_from_queue, key_labels_from_queue = self.retrieve_embeddings_labels_from_queue()
 
-        log_callback = self.make_log_callback("train_track") if self.training else None
+        # log_callback = self.make_log_callback("train_track") if self.training else None
+        log_callback = None
 
         track_loss, _ = self.criterion.forward(
             query_embeddings,
@@ -247,7 +250,8 @@ class MusicMetricLearner(pl.LightningModule):
     ):
         key_embeddings_for_category, key_labels_for_category = self.retrieve_embeddings_labels_from_queue(category_idx=category_idx)
 
-        log_callback = self.make_log_callback(f"train_cat{category_idx}") if self.training else None
+        # log_callback = self.make_log_callback(f"train_cat{category_idx}") if self.training else None
+        log_callback = None
 
         category_loss, _ = self.criterion.forward(
             query_category_embeddings,
@@ -302,11 +306,6 @@ class MusicMetricLearner(pl.LightningModule):
         """
         assert images.shape[1] == 1 and len(images.shape) == 4
         category_embeddings = self.forward_step(images=images, category_n=category_n)
-        log_callback = (
-            self.make_log_callback(f"train_cat_{category_n[0].detach().cpu().item()}")
-            if self.training
-            else None
-        )
         category_idx = cast(int, category_n[0].item())
         category_loss = self.moco_category_loss(
             query_category_embeddings=category_embeddings,
@@ -623,7 +622,7 @@ class MusicMetricLearner(pl.LightningModule):
         elif self.hparams.optimizer == "adam":
             opt = torch.optim.Adam(self.parameters(), lr=lr)
         elif self.hparams.optimizer == "sgd":
-            opt = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum)
+            opt = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum, nesterov=True)
         elif self.hparams.optimizer == "asgd":
             opt = torch.optim.ASGD(self.parameters(), lr=lr)
         else:
