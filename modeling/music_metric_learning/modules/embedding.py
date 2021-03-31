@@ -21,10 +21,18 @@ class EmbeddingMLP(nn.Module):
         self.embedding = nn.Embedding(
             num_embeddings=num_embeddings, embedding_dim=category_embedding_dim
         )
+        nn.init.zeros_(self.embedding.weight)
+        
+        hidden = nn.Linear(category_embedding_dim + in_dim, hidden_dim, bias=True)
+        nn.init.kaiming_normal_(hidden.weight, nonlinearity='relu')
+        nn.init.zeros_(hidden.bias)
+
+        output = nn.Linear(hidden_dim, out_dim, bias=True)
+
         self.mlp = nn.Sequential(
-            nn.Linear(category_embedding_dim + in_dim, hidden_dim, bias=True),
+            hidden,
             nn.ReLU(),
-            nn.Linear(hidden_dim, out_dim, bias=True),
+            output
         )
         self.dropout = dropout
 

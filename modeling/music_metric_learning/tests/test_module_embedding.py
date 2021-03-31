@@ -1,4 +1,3 @@
-import pytest
 import torch
 from music_metric_learning.modules.embedding import EmbeddingMLP
 
@@ -10,4 +9,4 @@ def test_embedding_mlp():
 
     embeddings, norm = embedder(sample_input, words)
     assert embeddings.shape == (5, 256)
-    assert torch.allclose(norm, torch.ones_like(norm))
+    assert torch.allclose(norm, torch.zeros_like(norm))
