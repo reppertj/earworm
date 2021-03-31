@@ -1,5 +1,6 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 import gc
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+
 
 # Because Colab is still on Python 3.7
 try:
@@ -11,34 +12,33 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from music_metric_learning.data.dataset import MusicBatchPart, MusicMetricDatamodule
+from music_metric_learning.data.dataset import (MusicBatchPart,
+                                                MusicMetricDatamodule)
 from music_metric_learning.losses.contrastive import SelectivelyContrastiveLoss
+from music_metric_learning.losses.cross_entropy import MoCoCrossEntropyLoss
 from music_metric_learning.modules.embedding import EmbeddingMLP
 from music_metric_learning.optimizers.adabound import AdaBound
 from music_metric_learning.utils.model_utils import (
-    batch_shuffle_single_gpu,
-    batch_unshuffle_single_gpu,
-    copy_parameters,
-    make_encoder,
-    visualizer_hook,
-)
-from omegaconf import OmegaConf
-from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
-from torch.optim.lr_scheduler import MultiplicativeLR  # type: ignore
+    batch_shuffle_single_gpu, batch_unshuffle_single_gpu, copy_parameters,
+    make_encoder, visualizer_hook)
+from omegaconf import OmegaConf, UnsupportedValueType
+from omegaconf.dictconfig import DictConfig
+from pytorch_metric_learning.utils.accuracy_calculator import \
+    AccuracyCalculator
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiplicativeLR  # type: ignore
 from torch.optim.optimizer import Optimizer
 from umap import UMAP
-from sklearn.manifold import TSNE
 
-DEFAULT_HPARAMS = {
-    "optimizer": "sgd",  # "sgd", "asgd", "adam"
-    "learning_rate": 0.001,
-    "final_learning_rate": 0.01,
-    "momentum": 0.9,
+DEFAULT_HPARAMS = OmegaConf.create({
+    "optimizer": "sgd",  # "adagrad", "asgd", "adam"
+    "learning_rate": 0.01,
+    "final_learning_rate": 0.01,  # only applies to adagrad
+    "momentum": 0.9,  # only applies to optimizers with momentum
     "batch_size": 512,
-    "epoch_length": 100_000,
-    "dropout": 0.5,
+    "epoch_length": 120_000,  # epochs are made up anyways
     "m_per_class": 32,
     "embedding_dim": 256,
+    "hidden_dim": 768,  # this parameter seems to make a bigger difference than it ought to
     "category_embedding_dim": 32,
     "encoder": "mobilenet",
     "encoder_params": {
@@ -46,63 +46,66 @@ DEFAULT_HPARAMS = {
         "freeze_weights": False,
         "max_pool": True,
     },
-    "loss_func": "xent_all",  # "selective", "xent_all", "softmax_only"
+    "loss_func": "moco",  # "selective", "xent", "softmax_only"
     "loss_params": {
-        "track_loss_alpha": 0.5,
+        "track_loss_alpha": 0.4,
         "hn_lambda": 1.0,
-        "temperature": 0.1,
+        "temperature": 0.2,
         "hard_margin": 0.8,
     },
     "key_encoder_momentum": 0.99,
     "queue_size": (512 * 70),
     "checkpoint_path": "model_checkpoints",
-}
+})
 
 
 class MusicMetricLearner(pl.LightningModule):
     def __init__(
-        self, datamodule: MusicMetricDatamodule, hparams: dict = DEFAULT_HPARAMS
+        self, datamodule: MusicMetricDatamodule, conf: DictConfig = DEFAULT_HPARAMS
     ):
         super().__init__()
-        conf = OmegaConf.create(hparams)
 
         ### Lightning Config ###
-        self.save_hyperparameters(conf)
+        self.save_hyperparameters()
         self.automatic_optimization = False
 
         ### Setup Dataset ###
-        self.dm: MusicMetricDatamodule = datamodule
-        self.dm.epoch_length = self.hparams.epoch_length  # type: ignore
+        # TODO: Figure out how to get PL's hyperparameter management to play well with MyPy
+        # Right now, it's a mess.
+        self.dm: MusicMetricDatamodule = self.hparams.datamodule  # type: ignore
+        self.dm.epoch_length = self.hparams.conf.epoch_length  # type: ignore
         if not self.dm.is_setup:
             self.dm.setup()
-        self.dm.batch_size = cast(int, self.hparams.get("batch_size"))
-        self.dm.m_per_class = cast(int, self.hparams.get("m_per_class"))
-        assert conf.queue_size % conf.batch_size == 0  # For simplicity
+        self.dm.batch_size = self.hparams.conf.batch_size  # type: ignore
+        self.dm.m_per_class = self.hparams.conf.m_per_class  # type: ignore
+        # For simplicity:
+        assert self.hparams.conf.batch_size % self.hparams.conf.batch_size == 0  # type: ignore
 
         ### Instantiate Model ###
         self.encoder = make_encoder(
             kind=conf.encoder,
-            pretrained=conf.encoder_params.pretrained,
-            freeze_weights=conf.encoder_params.freeze_weights,
-            max_pool=conf.encoder_params.max_pool,
+            pretrained=self.hparams.conf.encoder_params.pretrained,  # type: ignore
+            freeze_weights=self.hparams.conf.encoder_params.freeze_weights,  # type: ignore
+            max_pool=self.hparams.conf.encoder_params.max_pool,  # type: ignore
         )
         self.embedder = EmbeddingMLP(
-            category_embedding_dim=conf.category_embedding_dim,
-            out_dim=conf.embedding_dim,
+            category_embedding_dim=self.hparams.conf.category_embedding_dim,  # type: ignore
+            hidden_dim=self.hparams.conf.hidden_dim,  # type: ignore
+            out_dim=self.hparams.conf.embedding_dim,  # type: ignore
             normalize_embeddings=False,  # We'll normalize in the loss function
-            dropout=conf.dropout
         )
 
         ### Instantiate Model Copy for MoCo Track Queue ###
         self.key_encoder = make_encoder(
-            kind=conf.encoder,
-            pretrained=conf.encoder_params.pretrained,
-            freeze_weights=cast(bool, self.hparams.get("freeze_weights")),
-            max_pool=conf.encoder_params.max_pool,
+            kind=self.hparams.conf.encoder,  # type: ignore
+            pretrained=self.hparams.conf.encoder_params.pretrained,  # type: ignore
+            freeze_weights=self.hparams.conf.encoder_params.freeze_weights,  # type: ignore
+            max_pool=self.hparams.conf.encoder_params.max_pool,  # type: ignore
         )
         self.key_embedder = EmbeddingMLP(
-            category_embedding_dim=conf.category_embedding_dim,
-            out_dim=conf.embedding_dim,
+            category_embedding_dim=self.hparams.conf.category_embedding_dim,  # type: ignore
+            hidden_dim=self.hparams.conf.hidden_dim,  # type: ignore
+            out_dim=self.hparams.conf.embedding_dim,  # type: ignore
             normalize_embeddings=False,
         )
         for model, key_model in (
@@ -111,10 +114,10 @@ class MusicMetricLearner(pl.LightningModule):
         ):
             copy_parameters(model, key_model)
 
-        self.key_encoder_momentum = cast(float, self.hparams.key_encoder_momentum)  # type: ignore
+        self.key_encoder_momentum = self.hparams.conf.key_encoder_momentum  # type: ignore
 
         ### Create the Queue ###
-        self.register_buffer("queue", torch.randn(conf.embedding_dim, conf.queue_size))
+        self.register_buffer("queue", torch.randn(self.hparams.conf.embedding_dim, self.hparams.conf.queue_size))  # type: ignore
         self.queue: torch.Tensor
         self.queue = F.normalize(self.queue, dim=0)
         self.register_buffer(
@@ -130,24 +133,26 @@ class MusicMetricLearner(pl.LightningModule):
             self.register_buffer(f"queue_{i}_labels", torch.full_like(self.queue_labels, -1))
 
         ### Instantiate Loss Function ###
-        loss_func = self.hparams.loss_func  # type: ignore
-        if loss_func in ["selective", "xent", "xent_all", "bce"]:
-            xent_only = True if loss_func in ["xent", "xent_all", "bce"] else False
+        loss_func = self.hparams.conf.loss_func  # type: ignore
+        if loss_func in ["selective", "xent", "bce"]:
+            xent_only = True if loss_func in ["xent", "bce"] else False
             bce_all = True if loss_func == "bce" else False
             softmax_all = True if loss_func == "xent_all" else False
             self.criterion = SelectivelyContrastiveLoss(
-                hn_lambda=cast(float, self.hparams.loss_params.hn_lambda),  # type: ignore
-                temperature=cast(float, self.hparams.loss_params.temperature),  # type: ignore
-                hard_cutoff=cast(float, self.hparams.loss_params.hard_margin),  # type: ignore
+                hn_lambda=cast(float, self.hparams.conf.loss_params.hn_lambda),  # type: ignore
+                temperature=cast(float, self.hparams.conf.loss_params.temperature),  # type: ignore
+                hard_cutoff=cast(float, self.hparams.conf.loss_params.hard_cutoff),   # type: ignore
                 xent_only=xent_only,
                 softmax_all=softmax_all,
                 bce_all=bce_all,
             )
+        elif loss_func == "moco":
+            self.criterion = MoCoCrossEntropyLoss(temperature=cast(float, self.hparams.conf.loss_params.temperature))   # type: ignore
         else:
-            raise ValueError("Loss function f{loss_func} not implemented")
+            raise ValueError(f"Loss function {loss_func} not implemented")
 
         ### Add utilities for logging ###
-        self.visualizer = UMAP(n_neighbors=10, min_dist=0.2, metric='cosine')
+        self.visualizer = UMAP(n_neighbors=10, min_dist=0.1, metric='cosine')
         self.accuracy = AccuracyCalculator()
 
     def forward_step(
@@ -276,9 +281,9 @@ class MusicMetricLearner(pl.LightningModule):
         category_label_queue = getattr(self, f"queue_{category_idx}_labels") 
         category_label_queue[ptr : ptr + batch_size] = new_category_labels
         
-        if not self.queue_is_full and ptr + batch_size >= self.hparams.queue_size:  # type: ignore
+        if not self.queue_is_full and ptr + batch_size >= self.hparams.conf.queue_size:  # type: ignore
             self.queue_is_full = True
-        ptr = (ptr + batch_size) % cast(int, self.hparams.queue_size)  # type: ignore
+        ptr = (ptr + batch_size) % cast(int, self.hparams.conf.queue_size)  # type: ignore
         self.queue_ptr[0] = ptr  # move pointer
         return None
 
@@ -406,23 +411,27 @@ class MusicMetricLearner(pl.LightningModule):
             assert track_embeddings is not None
             track_labels = batch_part["track_labels"]
             normalized = F.normalize(track_embeddings, p=2, dim=1).clone().contiguous()
-            if stage == "train":
-                key_embeddings, key_labels = self.retrieve_embeddings_labels_from_queue()
-                accuracy =self.accuracy.get_accuracy(
-                    normalized,
-                    F.normalize(key_embeddings, p=2, dim=1).clone().contiguous(),
-                    track_labels,
-                    key_labels,
-                    embeddings_come_from_same_source=False,
-                )
-            else:
-                accuracy = self.accuracy.get_accuracy(
-                    normalized,
-                    normalized,
-                    track_labels,
-                    track_labels,
-                    embeddings_come_from_same_source=True,
-                )
+            try:
+                if stage == "train":
+                    key_embeddings, key_labels = self.retrieve_embeddings_labels_from_queue()
+                    accuracy =self.accuracy.get_accuracy(
+                        normalized,
+                        F.normalize(key_embeddings, p=2, dim=1).clone().contiguous(),
+                        track_labels,
+                        key_labels,
+                        embeddings_come_from_same_source=False,
+                    )
+                else:
+                    accuracy = self.accuracy.get_accuracy(
+                        normalized,
+                        normalized,
+                        track_labels,
+                        track_labels,
+                        embeddings_come_from_same_source=True,
+                    )
+            except RuntimeError as e:
+                accuracy = {"accuracy_error": 1}
+                self.print(f"Error: {e}")
             accuracy_log = {f"{stage}_track_{k}": v for k, v in accuracy.items()}
             if hasattr(self.logger.experiment, "log"):
                 self.logger.experiment.log(accuracy_log)
@@ -432,13 +441,17 @@ class MusicMetricLearner(pl.LightningModule):
             category = cast(int, batch_part["category_n"][0].item())
             class_labels = batch_part["class_labels"]
             normalized = F.normalize(category_embeddings, p=2, dim=1).clone().contiguous()
-            accuracy = self.accuracy.get_accuracy(
-                normalized,
-                normalized,
-                class_labels,
-                class_labels,
-                embeddings_come_from_same_source=True,
-            )
+            try:
+                accuracy = self.accuracy.get_accuracy(
+                    normalized,
+                    normalized,
+                    class_labels,
+                    class_labels,
+                    embeddings_come_from_same_source=True,
+                )
+            except RuntimeError as e:
+                accuracy = {"accuracy_error": 1}
+                self.print(f"Error: {e}")
             accuracy_log = {
                 f"{stage}_cat{category}_{k}": v for k, v in accuracy.items()
             }
@@ -450,16 +463,19 @@ class MusicMetricLearner(pl.LightningModule):
             labels = batch_part["class_labels"].clone().detach()
             category = cast(int, batch_part["category_n"][0].clone().detach().item())
             label_map = self.get_label_maps(stage)[category]
-            visualization = visualizer_hook(
-                visualizer=self.visualizer,
-                embeddings=F.normalize(category_embeddings),
-                labels=labels,
-                label_map=label_map,
-                split_name=stage,
-                show_plot=False,
-            )
-            if hasattr(self.logger.experiment, "log"):
-                self.logger.experiment.log({f"{stage}_{category}": visualization})
+            try:
+                visualization = visualizer_hook(
+                    visualizer=self.visualizer,
+                    embeddings=F.normalize(category_embeddings),
+                    labels=labels,
+                    label_map=label_map,
+                    split_name=stage,
+                    show_plot=False,
+                )
+                if hasattr(self.logger.experiment, "log"):
+                    self.logger.experiment.log({f"{stage}_{category}": visualization})
+            except Exception as e:
+                self.print(f"Visualization error: {e}")
         return None
 
     def training_step(self, batch, batch_idx):
@@ -498,7 +514,7 @@ class MusicMetricLearner(pl.LightningModule):
                     class_labels=class_labels,
                     category_n=category_n,
                 )
-                loss: torch.Tensor = category_loss + (self.hparams.loss_params.track_loss_alpha * track_loss)  # type: ignore
+                loss: torch.Tensor = category_loss + (self.hparams.conf.loss_params.track_loss_alpha * track_loss)
 
                 self.manual_backward(loss, opt)
 
@@ -531,8 +547,6 @@ class MusicMetricLearner(pl.LightningModule):
             k: [] for k in range(len(self.saved_batches))
         }
         gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     @torch.no_grad()
     def on_validation_epoch_start(self) -> None:
@@ -552,7 +566,7 @@ class MusicMetricLearner(pl.LightningModule):
             category_n=batch_part["category_n"],
         )
         loss = category_loss + (
-            self.hparams.loss_params.track_loss_alpha * track_loss
+            self.hparams.conf.loss_params.track_loss_alpha * track_loss
         )
 
         self.log("val_loss", loss, on_epoch=True)
@@ -606,33 +620,31 @@ class MusicMetricLearner(pl.LightningModule):
     def configure_callbacks(self):
         lr_monitor = pl.callbacks.LearningRateMonitor()
         checkpoint = pl.callbacks.ModelCheckpoint(
-            self.hparams.checkpoint_path,
+            self.hparams.conf.checkpoint_path,
             monitor="train_loss_step",
             save_last=True,
-            save_top_k=8,
+            save_top_k=12,
         )
         return [checkpoint, lr_monitor]
 
     def configure_optimizers(self):
-        lr = self.hparams.learning_rate
-        final_lr = self.hparams.final_learning_rate
-        momentum = self.hparams.momentum
-        if self.hparams.optimizer == "adabound":
+        lr = self.hparams.conf.learning_rate
+        final_lr = self.hparams.conf.final_learning_rate
+        momentum = self.hparams.conf.momentum
+        if self.hparams.conf.ptimizer == "adabound":
             opt = AdaBound(self.parameters(), lr=lr, final_lr=final_lr)
-        elif self.hparams.optimizer == "adam":
+        elif self.hparams.conf.optimizer == "adam":
             opt = torch.optim.Adam(self.parameters(), lr=lr)
-        elif self.hparams.optimizer == "sgd":
+        elif self.hparams.conf.optimizer == "sgd":
             opt = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum, nesterov=True)
-        elif self.hparams.optimizer == "asgd":
+            sched = CosineAnnealingLR(opt, T_max=200)
+            return [opt], [sched]
+        elif self.hparams.conf.optimizer == "asgd":
             opt = torch.optim.ASGD(self.parameters(), lr=lr)
         else:
             raise ValueError("optimizer not implemented")
-
-        def lr_lambda(epoch: int):
-            return 0.1 if epoch in (50, 85) else 1
-
-        sched = MultiplicativeLR(opt, lr_lambda)
-        return [opt], [sched]
+        
+        return [opt]
 
     def train_dataloader(self, *args, **kwargs):
         loaders = [self.dm.train_dataloader(i, *args, **kwargs) for i in range(4)]
