@@ -273,3 +273,6 @@ pip-selfcheck.json
 **/npm-debug.log*/**
 **/yarn-debug.log*/**
 **/yarn-error.log*/**
+
+# Ingestion scripts and exploration
+ingestion
