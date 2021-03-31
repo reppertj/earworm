@@ -231,6 +231,7 @@ class SelectivelyContrastiveLoss(nn.Module):
             easy_triplet_loss = -F.log_softmax(
                 triplets[easy_triplet_mask, :] / self.temperature, dim=1
             )[:, 0].sum()
+            n_triplets: Union[int, torch.Tensor]
             n_triplets = (
                 hard_triplet_mask.float().sum() + easy_triplet_mask.float().sum()
             )

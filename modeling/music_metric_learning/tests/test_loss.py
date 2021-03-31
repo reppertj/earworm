@@ -10,6 +10,7 @@ from music_metric_learning.losses.contrastive import (
     mine_hard_negatives,
     same_label_mask,
 )
+from music_metric_learning.losses.cross_entropy import MoCoCrossEntropyLoss
 
 
 def angle_to_coord(angle: float):
@@ -164,3 +165,16 @@ def test_cross_entropy_loss():
         [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
     )
     loss, _ = criterion(embeddings, labels, key_embeddings, labels)
+    assert torch.isclose(loss, torch.tensor(1.0866, dtype=loss.dtype), atol=1e-7, rtol=1e-4)
+
+def test_moco_cross_entropy_loss():
+    criterion = MoCoCrossEntropyLoss(temperature=0.1)
+    embeddings = torch.tensor(
+        [angle_to_coord(float(a)) for a in [10, 15, 25, 35, 40, 80]]
+    )
+    labels = torch.tensor([0, 0, 1, 1, 2, 2])
+    key_embeddings = torch.tensor(
+        [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
+    )
+    loss, _ = criterion(embeddings, labels, key_embeddings, labels)
+    assert torch.isclose(loss, torch.tensor(1.0866, dtype=loss.dtype), atol=1e-7, rtol=1e-4)
