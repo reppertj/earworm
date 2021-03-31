@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@material-ui/core": "4.11.3",
+    "@material-ui/icons": "4.11.2",
+    "@material-ui/lab": "4.0.0-alpha.57",
     "@reduxjs/toolkit": "1.5.0",
     "@testing-library/jest-dom": "5.11.4",
     "@testing-library/react": "11.0.2",
     "@types/fontfaceobserver": "0.0.6",
     "@types/jest": "25.1.4",
-    "@types/local-storage": "1.4.0",
     "@types/node": "14.6.4",
     "@types/react": "17.0.0",
     "@types/react-dom": "16.9.8",
@@ -49,20 +51,39 @@
     "react-redux": "7.2.1",
     "react-router-dom": "5.2.0",
     "react-scripts": "4.0.3",
-    "wave-resampler": "^1.0.0",
-    "web-vitals": "^1.1.0"
+    "react-test-renderer": "16.13.1",
+    "redux-injectors": "1.3.0",
+    "redux-saga": "1.1.3",
+    "rimraf": "3.0.2",
+    "sanitize.css": "12.0.1",
+    "serve": "11.3.2",
+    "shelljs": "0.8.4",
+    "styled-components": "5.1.0",
+    "stylelint": "13.7.0",
+    "stylelint-config-recommended": "3.0.0",
+    "stylelint-config-styled-components": "0.1.1",
+    "stylelint-processor-styled-components": "1.10.0",
+    "ts-node": "9.0.0",
+    "typescript": "4.1.3",
+    "wave-resampler": "1.0.0",
+    "wavesurfer.js": "4.6.0",
+    "web-vitals": "0.2.4"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "eject": "react-scripts eject",
+    "test:generators": "ts-node --project=./internals/ts-node.tsconfig.json ./internals/testing/generators/test-generators.ts",
+    "start:prod": "yarn run build && serve -s build",
+    "checkTs": "tsc --noEmit",
+    "eslint": "eslint --ext js,ts,tsx",
+    "lint": "yarn run eslint src",
+    "lint:fix": "yarn run eslint --fix src",
+    "lint:css": "stylelint src/**/*.css",
+    "generate": "cross-env TS_NODE_PROJECT='./internals/ts-node.tsconfig.json' plop --plopfile internals/generators/plopfile.ts",
+    "prettify": "prettier --write",
+    "extract-messages": "i18next-scanner --config=internals/extractMessages/i18next-scanner.config.js"
   },
   "browserslist": {
     "production": [
@@ -76,5 +97,43 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://127.0.0.1:8081"
+  "engines": {
+    "npm": ">=6.4.1",
+    "node": ">=10.13.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "yarn run eslint --fix"
+    ],
+    "*.{md,json}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "yarn run checkTs && lint-staged"
+    }
+  },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx,ts,tsx}",
+      "!src/**/*/*.d.ts",
+      "!src/**/*/Loadable.{js,jsx,ts,tsx}",
+      "!src/**/*/messages.ts",
+      "!src/**/*/types.ts",
+      "!src/index.tsx"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 90,
+        "functions": 90,
+        "lines": 90,
+        "statements": 90
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/wavesurfer.js": "3.3.2",
+    "worker-loader": "3.0.8"
+  }
 }
