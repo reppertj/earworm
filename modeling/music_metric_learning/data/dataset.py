@@ -1,5 +1,6 @@
 import os
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
+
 try:
     from typing import Literal, TypedDict, Type
 except ImportError:
@@ -14,7 +15,6 @@ from sklearn.model_selection import train_test_split
 from music_metric_learning.data.stats import MEANS as MEANS_LIST, STDS as STDS_LIST
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import Compose
 
 from music_metric_learning.samplers.per_class import ClassThenInstanceSampler
 
@@ -23,6 +23,7 @@ def make_np(x):
     return np.array(x).copy().astype("float32")
 
 
+# Stats computed from preprocessed AudioSet data; means and stds are per-mel band
 MEANS = torch.tensor(MEANS_LIST)
 STDS = torch.tensor(STDS_LIST)
 
@@ -69,6 +70,27 @@ class Identity(nn.Module):
         return x
 
 
+class Transpose(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, tensor: torch.Tensor):
+        return tensor.t()
+
+
+class MinMaxScale(nn.Module):
+    """Scale input to a given range. Input should not be batched."""
+
+    def __init__(self, range=(-1, 1)):
+        super().__init__()
+        self.min = range[0]
+        self.max = range[1]
+
+    def forward(self, sgrams: torch.Tensor):
+        sgrams_std = (sgrams - sgrams.min()) / (sgrams.max() - sgrams.min())
+        return sgrams_std * (self.max - self.min) + self.min
+
+
 def prepare_tensors_from_data(
     model: nn.Module,
     in_dir: str,
@@ -79,7 +101,7 @@ def prepare_tensors_from_data(
     fail_file="failures.txt",
     suffix=".pt",
 ):
-    from music_metric_learningdata.preprocessing import TensorPreprocesser  # type: ignore
+    from music_metric_learning.data.preprocessing import TensorPreprocesser
 
     """Output paths will mirror input paths"""
     with open(file_txt, "r") as listing_file:
@@ -102,12 +124,15 @@ def tensor_files_in_dir(directory: str):
                 result.append(os.path.join(root, f))
     return result
 
+
 class MusicBatchPart(TypedDict):
     images: torch.Tensor
     category_n: torch.Tensor
     class_labels: torch.Tensor
     track_category_n: torch.Tensor
     track_labels: torch.Tensor
+
+
 class CategorySpecificDataset(Dataset):
     def __init__(
         self,
@@ -119,8 +144,7 @@ class CategorySpecificDataset(Dataset):
         test_size: Union[int, float],
         random_state: Union[np.random.Generator, int],
     ) -> None:
-        """Dataset containing tuples of
-        (tensors, class_label, track_label)
+        """Dataset that returns a MusicBatchPart
 
         Tensors are (2, H, W), containing two spectrograms per sample. In training mode,
         the order of these spectrograms is random. The class label is category-specific
@@ -170,9 +194,7 @@ class CategorySpecificDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-    def __getitem__(
-        self, index: Union[torch.Tensor, int]
-    ) -> MusicBatchPart:
+    def __getitem__(self, index: Union[torch.Tensor, int]) -> MusicBatchPart:
         if isinstance(index, torch.Tensor):
             idx = int(index.item())
         else:
@@ -216,15 +238,35 @@ class MusicMetricDatamodule(pl.LightningDataModule):
         dataset_csv: str,
         tensor_dir: str,
         m_per_class: int,
-        epoch_length: int = 20000,
-        batch_size: int = 128,
-        test_size: Union[float, int] = 1024,
-        val_size: Union[float, int] = 1024,
+        epoch_length: int = 640 * 180,
+        batch_size: int = 640,
+        test_size: Union[float, int] = 1280,
+        val_size: Union[float, int] = 1920,
         transforms: Optional[Union[Type[MELNormalize], Type[nn.Module]]] = MELNormalize,
         random_state: Union[int, np.random.Generator] = 42,
         num_workers: int = 1,
         pin_memory: bool = True,
     ):
+        """Primary entry point for creating training dataloaders. Training dataloaders are batched
+        with >= m_per_class samples per class, to ensure sufficient examples are available for
+        comparision in each batch.
+
+        Arguments:
+            dataset_csv {str} -- CSV containing paths to and labels for training data
+            tensor_dir {str} -- Root directory containing preprocessed spectrogram tensors
+            m_per_class {int} -- Number of samples per class from training dataloaders
+
+        Keyword Arguments:
+            epoch_length {int} -- Because of the sampling method, the `epoch` length
+            is not the length of the dataset but must be determined by the user. (default: {640*180})
+            batch_size {int} -- (default: {640})
+            test_size {Union[float, int]} -- (default: {1280})
+            val_size {Union[float, int]} -- (default: {1920})
+            transforms {Optional[Union[Type[MELNormalize], Type[nn.Module]]]} -- (default: {MELNormalize})
+            random_state {Union[int, np.random.Generator]} -- (default: {42})
+            num_workers {int} -- (default: {1})
+            pin_memory {bool} -- (default: {True})
+        """
         super().__init__()
         self.csv = dataset_csv
         self.m_per_class = m_per_class
@@ -320,237 +362,6 @@ class MusicMetricDatamodule(pl.LightningDataModule):
         )
 
 
-class TripletDataset(Dataset):
-    def __init__(self, df, split, transform, val_size, test_size, random_state: int):
-        """
-        df should have columns 'path' and 'label_n'
-        """
-        super().__init__()
-        self.df = df
-        self.label_map = (
-            self.df[["label_n", "label"]].set_index("label_n").to_dict()["label"]
-        )
-        self.n_classes = max(self.label_map.keys()) + 1
-        self.split = split
-        self.transform = transform
-        self.val_size = val_size
-        self.test_size = test_size
-        self.random_state = random_state
-        self.bg = np.random.default_rng(random_state)
-        self.subset()
-
-    def subset(self):
-        idxs = np.arange(len(self.df))
-        # To prevent leakage, these splits must be the same every time, so we apply the random seed
-        # directly here instead of using a global bit generator. Ideally, we would siphon off test
-        # data entirely into a different directory.
-        train, test = train_test_split(
-            idxs, test_size=self.test_size, random_state=self.random_state
-        )
-        train, val = train_test_split(
-            train, test_size=self.val_size, random_state=self.random_state
-        )
-        if self.split == "train":
-            self.idxs = train
-        elif self.split == "val":
-            self.idxs = val
-        elif self.split == "test":
-            self.idxs = test
-
-    def __len__(self):
-        return self.df.shape[0]
-
-    def __getitem__(
-        self, idx: Union[torch.Tensor, int]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        if torch.is_tensor(idx):
-            idx = idx.item()  # type: ignore
-
-        item = self.df.iloc[idx]
-        left, right = torch.load(item.path)
-        label = torch.tensor(item.label_n, dtype=torch.long)  # type: ignore
-
-        if self.transform:
-            with torch.no_grad():
-                left = self.transform(left)
-                right = self.transform(right)
-
-        if self.split == "train":
-            selector = self.bg.integers(2)
-        else:
-            selector = 0
-        stacked = torch.stack(((left, right)[selector], (left, right)[1 - selector]))
-
-        return ((left, right)[selector].unsqueeze(0), label, stacked.unsqueeze(1))
-
-
-class ConcatDataset(Dataset):
-    def __init__(self, *datasets):
-        self.datasets = datasets
-
-    def __getitem__(self, i):
-        return tuple(d[i] for d in self.datasets)
-
-    def __len__(self):
-        return min(len(d) for d in self.datasets)
-
-
-class DummyDataModule(pl.LightningDataModule):
-    def __init__(self):
-        pass
-
-    def setup(self, stage=None):
-        return None
-
-
-class ConditionalTripletDatamodule(pl.LightningDataModule):
-    def __init__(
-        self,
-        category_csvs: List[str],
-        dataset_dir: str,
-        batch_size=128,  # TODO: Change defaults outside dev set
-        test_size=1024,
-        val_size=1024,
-        transforms=MELNormalize,
-        random_state=42,
-        num_workers=2,
-        pin_memory=True,
-    ):
-        """Primary entry point to create train/validate dataloaders for multi-category datasets.
-
-        Arguments:
-            category_dfs {List[pd.DataFrame]} -- one DataFrame per dataset, each with "path" and
-            "label_n" columns.
-        """
-        super().__init__()
-        self.csv_paths = category_csvs
-        self.dataset_dir = dataset_dir
-        self.batch_size = batch_size
-        self.test_size = test_size
-        self.val_size = val_size
-        self.transforms = transforms
-        self.random_state = random_state
-        self.num_workers = num_workers
-        self.pin_memory = pin_memory
-
-    def setup(self, stage=None):
-        self.transforms = MELNormalize
-        dfs = [pd.read_csv(path) for path in self.csv_paths]
-        for i in range(len(dfs)):
-            dfs[i]["path"] = self.dataset_dir + dfs[i]["path"]
-        self.dfs = dfs
-
-    def train_dataloader(self, dataset_idx, batch_size=None):
-        batch_size = batch_size or self.batch_size
-
-        dataset = TripletDataset(
-            self.dfs[dataset_idx],
-            "train",
-            self.transforms(),
-            self.val_size,
-            self.test_size,
-            self.random_state,
-        )
-
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
-
-    def val_dataloader(self, dataset_idx, batch_size=None):
-        batch_size = batch_size or self.batch_size
-        dataset = TripletDataset(
-            self.dfs[dataset_idx],
-            "val",
-            self.transforms(),
-            self.val_size,
-            self.test_size,
-            self.random_state,
-        )
-
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
-
-    def test_dataloader(self, dataset_idx, batch_size=None):
-        batch_size = batch_size or self.batch_size
-        dataset = TripletDataset(
-            self.dfs[dataset_idx],
-            "test",
-            self.transforms(),
-            self.val_size,
-            self.random_state,
-        )
-
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
-
-
-class SgramDataset(Dataset):
-    def __init__(self, paths, split, transform, val_size, test_size, random_state=42):
-        """val_size, test_size can be int or float between 0 and 1
-        directory is root directory of audio samples
-        dataframe should contain a `path` column pointing to preprocessed tensors in dataset
-        """
-        super().__init__()
-        self.paths = paths
-        self.split = split
-        self.transform = transform
-        self.val_size = val_size
-        self.test_size = test_size
-        self.random_state = random_state
-        self.subset(paths)
-
-    def subset(self, paths):
-        idxs = np.arange(len(paths))
-        if self.split not in {"train", "test", "val"}:
-            raise ValueError
-        train, test = train_test_split(
-            idxs, test_size=self.test_size, random_state=self.random_state
-        )
-        if self.split == "test":
-            self.idxs = test
-            return
-        train, val = train_test_split(
-            train, test_size=self.val_size, random_state=self.random_state
-        )
-        if self.split == "train":
-            self.idxs = train
-        elif self.split == "val":
-            self.idxs = val
-
-    def __len__(self):
-        return self.idxs.shape[0]
-
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.item()
-
-        path = self.paths[self.idxs[idx]]
-        tensor = torch.load(path)
-
-        if self.transform:
-            with torch.no_grad():
-                tensor = self.transform(tensor)
-
-        return tensor.unsqueeze(0)
-
-
 class RunningStats(object):
     """Computes running mean and standard deviation
     Url: https://gist.github.com/wassname/a9502f562d4d3e73729dc5b184db2501
@@ -628,119 +439,3 @@ calculate-a-running-standard-deviation>
 
     def __str__(self):
         return "mean={: 2.4f}, std={: 2.4f}".format(self.mean, self.std)
-
-
-class Transpose(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, tensor: torch.Tensor):
-        return tensor.t()
-
-
-class MinMaxScale(nn.Module):
-    """Scale input to a given range. Input should not be batched."""
-
-    def __init__(self, range=(-1, 1)):
-        super().__init__()
-        self.min = range[0]
-        self.max = range[1]
-
-    def forward(self, sgrams: torch.Tensor):
-        sgrams_std = (sgrams - sgrams.min()) / (sgrams.max() - sgrams.min())
-        return sgrams_std * (self.max - self.min) + self.min
-
-
-class SgramDataModule(pl.LightningDataModule):
-    def __init__(
-        self,
-        data_dir,
-        batch_size=64,
-        test_size=2048,
-        val_size=2048,
-        random_state=42,
-        num_workers=2,
-        pin_memory=True,
-    ):
-        """Primary entry point to create train/test/validate dataloaders for spectrogram datasets.
-
-        Arguments:
-            data_dir {str} -- path to directory containing db-scaled mel spectrograms with ".pt"
-            extensions (from `torch.save`), possibly in subdirectories. No other ".pt" files
-            should be in this directory.
-        """
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.test_size = test_size
-        self.val_size = val_size
-        self.random_state = random_state
-        self.num_workers = num_workers
-        self.pin_memory = pin_memory
-
-    def setup(self, stage=None):
-        paths = tensor_files_in_dir(self.data_dir)
-        idxs = np.arange(len(paths))
-        np.random.seed(self.random_state)
-        np.random.shuffle(idxs)
-        self.paths = list(np.array(paths, dtype="object")[idxs])
-        transforms = Compose([Transpose(), MELNormalize()])
-        if stage == "fit" or stage is None:
-            self.train = SgramDataset(
-                self.paths,
-                "train",
-                transforms,
-                self.val_size,
-                self.test_size,
-                self.random_state,
-            )
-            self.val = SgramDataset(
-                self.paths,
-                "val",
-                transforms,
-                self.val_size,
-                self.test_size,
-                self.random_state,
-            )
-        if stage == "test" or stage is None:
-            self.test = SgramDataset(
-                self.paths,
-                "test",
-                transforms,
-                self.val_size,
-                self.test_size,
-                self.random_state,
-            )
-
-    def train_dataloader(self, batch_size=None):
-        batch_size = batch_size or self.batch_size
-        return DataLoader(
-            self.train,
-            batch_size=batch_size,
-            shuffle=True,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
-
-    def val_dataloader(self, batch_size=None):
-        batch_size = batch_size or self.batch_size
-        return DataLoader(
-            self.train,
-            batch_size=batch_size,
-            shuffle=False,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
-
-    def test_dataloader(self, batch_size=None):
-        batch_size = batch_size or self.batch_size
-        return DataLoader(
-            self.train,
-            batch_size=batch_size,
-            shuffle=False,
-            drop_last=True,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-        )
