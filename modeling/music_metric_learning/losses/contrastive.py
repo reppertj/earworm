@@ -1,17 +1,9 @@
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
-from pytorch_metric_learning.utils.common_functions import neg_inf
 import torch
 import torch.nn.functional as F
 from torch import nn
-from pytorch_metric_learning.losses.contrastive_loss import (
-    ContrastiveLoss as PMLContrastiveLoss,
-)
-from pytorch_metric_learning.distances.dot_product_similarity import (
-    DotProductSimilarity as PMLDotProductSimilarity,
-)
-from pytorch_metric_learning.utils.loss_and_miner_utils import get_all_pairs_indices
 
 
 def cosine_similarity_matrix(embeddings: torch.Tensor) -> torch.Tensor:
@@ -107,7 +99,7 @@ def mine_easy_positives(
         distances.clone().detach()
     )  # We'll modify this, and it's not needed for backprop from here forward
     distances[~same_label_mask] = -1  # Only consider positive pairings
-    distances[distances > 0.9999] = 1  # For numerical reasons?
+    distances[distances > 0.9999] = 1  # Don't count identical cases
     pos_maxes, pos_max_idxs = distances.max(dim=1)  # (batch_size,)
     pos_maxes_valid_mask = (pos_maxes > -1) & (
         pos_maxes < 1
@@ -146,7 +138,6 @@ class SelectivelyContrastiveLoss(nn.Module):
         temperature: float = 0.1,
         hard_cutoff: float = 0.8,
         xent_only: bool = False,
-        softmax_all: bool = False,
         bce_all: bool = False,
         label_smoothing_epsilon: float = 0.1,
     ):
@@ -166,7 +157,6 @@ class SelectivelyContrastiveLoss(nn.Module):
         self.temperature = temperature
         self.hard_cutoff = hard_cutoff
         self.xent_only = xent_only
-        self.softmax_all = softmax_all
         self.bce_all = bce_all
         self.label_smoothing_epsilon = label_smoothing_epsilon
 
@@ -240,28 +230,14 @@ class SelectivelyContrastiveLoss(nn.Module):
             loss = (self.hn_lambda * hard_triplet_loss + easy_triplet_loss) / n_triplets
         else:
             if self.bce_all:
-                false_prob = torch.tensor(self.label_smoothing_epsilon, dtype=distances.dtype, device=distances.device)
+                false_prob = torch.tensor(
+                    self.label_smoothing_epsilon,
+                    dtype=distances.dtype,
+                    device=distances.device,
+                )
                 true_prob = 1 - false_prob
                 ground_truth = torch.where(same_mask, true_prob, false_prob)
                 loss = F.binary_cross_entropy_with_logits(distances, ground_truth)
-
-            elif self.softmax_all:
-                distances[same_mask] = torch.finfo(
-                    distances.dtype
-                ).min  # set anchor-positives in anchor-negative space to negative infinity
-                # logits have shape (query_size - n_invalid_positives, 1 + n_key_embeddings)
-                logits = torch.cat(
-                    [
-                        easy_positive_scores[pos_maxes_valid_mask].unsqueeze(1),
-                        distances[pos_maxes_valid_mask, :],
-                    ],
-                    dim=1,
-                ) / self.temperature
-                # Positive pairs have label 0 for cross-entropy loss
-                ground_truth = torch.zeros(
-                    logits.shape[0], dtype=torch.long, device=logits.device
-                )
-                loss = F.cross_entropy(logits, ground_truth)
             else:
                 loss = -F.log_softmax(
                     triplets[combined_valid_mask, :] / self.temperature, dim=1
