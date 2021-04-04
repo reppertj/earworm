@@ -21,7 +21,7 @@ if (
     torchaudio.set_audio_backend("sox_io")
     logger.debug("Set audio backend to sox_io")
 
-# Required because as of 0.7.2, torchaudio links its own OpenMP runtime in addition to pytorch
+# Required because as of 0.7.2 on OSX, torchaudio links its own OpenMP runtime in addition to pytorch
 # This tells OpenMP not to crash when this happens.
 if sys.platform == "darwin":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -31,89 +31,8 @@ class AudioTooShortError(ValueError):
     pass
 
 
-# class JittableLogmelFilterBank(torchlibrosa.LogmelFilterBank):
-#     """
-#     Cannot have literal infinity in the model graph for tensorflow.js 32bit
-#     """
-
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-
-#     def power_to_db(self, input):
-#         r"""Power to db, this function is the pytorch implementation of
-#         librosa.power_to_lb
-#         """
-#         GIANT_32B_UFLOAT = torch.tensor(2.0 ** 126, dtype=torch.float32)
-#         ref_value = self.ref
-#         log_spec = (
-#             10.0
-#             * torch.log(torch.clamp(input, min=self.amin, max=GIANT_32B_UFLOAT))
-#             / torch.log(torch.tensor(10.0))
-#         )
-#         log_spec -= 10.0 * np.log10(np.maximum(self.amin, ref_value))
-
-#         if self.top_db is not None:
-#             if self.top_db < 0:
-#                 raise ValueError("top_db must be non-negative")
-#             log_spec = torch.clamp(
-#                 log_spec, min=log_spec.max().item() - self.top_db, max=GIANT_32B_UFLOAT
-#             )
-
-#         return log_spec
-
-
-# class JittableWaveformtoTensor(nn.Module):
-#     def __init__(
-#         self,
-#         sample_rate: int = 15950,
-#         seconds: float = 10.0,
-#         win_length: int = 1024,
-#         hop_length: int = 256,
-#         n_mels: int = 128,
-#     ):
-#         """
-#         Jittable class for onnx export. Zero centers and normalizes, resamples, and
-#         returns mel spectrogram.
-#         Does NOT trim length or standardize outputs.
-#         """
-#         super().__init__()
-#         self.sample_rate = sample_rate
-#         self.seconds = seconds
-#         self.min_samples = int(sample_rate * seconds)
-#         self.win_length = win_length
-#         self.hop_length = hop_length
-#         self.n_mels = n_mels
-#         self.sample_input = torch.randn(
-#             (1, int(self.sample_rate * self.seconds)), dtype=torch.float32
-#         )
-
-#         self.mel_spectogram = nn.Sequential(
-#             torchlibrosa.Spectrogram(
-#                 n_fft=self.win_length,
-#                 hop_length=self.hop_length,
-#                 win_length=self.win_length,
-#             ),
-#             JittableLogmelFilterBank(
-#                 sr=self.sample_rate,
-#                 n_fft=self.win_length,
-#                 n_mels=self.n_mels,
-#             ),
-#         )
-
-#     def forward(self, waveform):
-#         # Input shape (n_channels, time)
-#         # Zero center and normalize to [-1, 1] to match torchaudio.load()
-#         # TODO: Normalize IN THE AUDIO PREPROCESSING IN THE MODEL!! THE JS SHOULD SEND AN AUDIO
-#         # data tensor NOT normalized in any way
-#         waveform = waveform.sub(waveform.mean())
-#         waveform = waveform.div(waveform.abs().max())
-#         waveform = waveform.mean(dim=0, keepdims=True)
-#         sgram = self.mel_spectogram(waveform)
-#         return sgram.transpose(2, 3).squeeze(0)
-
-
 class TensorPreprocesser:
-    def __init__(self, model, return_two: bool=False) -> None:
+    def __init__(self, model, return_two: bool = False) -> None:
         self.model = model
         self.return_two = return_two
 
@@ -125,7 +44,9 @@ class TensorPreprocesser:
                 if os.path.exists(out):
                     print("Skipping:", out)
                     return (out, True)
-                tensors = self.model.from_path(inp, return_two=self.return_two, return_mfcc=mfcc)
+                tensors = self.model.from_path(
+                    inp, return_two=self.return_two, return_mfcc=mfcc
+                )
                 dir = os.path.dirname(out)
                 if not os.path.exists(dir):
                     os.mkdir(dir)
