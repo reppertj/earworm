@@ -131,6 +131,7 @@ def test_selectively_contrastive_loss():
     manual_loss = (easy_triplet_loss + criterion.hn_lambda * hard_triplet_loss) / 7.0
     assert torch.allclose(loss, manual_loss)
 
+
 def test_keyed_selectively_contrastive_loss():
     criterion = SelectivelyContrastiveLoss()
     embeddings = torch.tensor(
@@ -141,31 +142,24 @@ def test_keyed_selectively_contrastive_loss():
         [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
     )
     easy_positives = torch.tensor([(5, 5)], dtype=torch.long)
-    hard_negatives = torch.tensor([(0, 4), (1, 4), (2, 4), (3, 4), (4, 3)], dtype=torch.long)
-    distances = keyed_cosine_similarity_matrix(embeddings, key_embeddings=key_embeddings)
-    loss, _ = criterion(embeddings, labels, key_embeddings=key_embeddings, key_labels=labels)
-    hard_triplet_loss = distances[hard_negatives[:, 0], hard_negatives[:, 1]].sum()
-    ap = (
-        distances[easy_positives[0, 0], easy_positives[0, 1]] * 10
+    hard_negatives = torch.tensor(
+        [(0, 4), (1, 4), (2, 4), (3, 4), (4, 3)], dtype=torch.long
     )
+    distances = keyed_cosine_similarity_matrix(
+        embeddings, key_embeddings=key_embeddings
+    )
+    loss, _ = criterion(
+        embeddings, labels, key_embeddings=key_embeddings, key_labels=labels
+    )
+    hard_triplet_loss = distances[hard_negatives[:, 0], hard_negatives[:, 1]].sum()
+    ap = distances[easy_positives[0, 0], easy_positives[0, 1]] * 10
     an = distances[5, 3] * 10
     easy_triplet_loss = -torch.log(
         torch.exp(ap).div(torch.exp(ap) + torch.exp(an))
     ).sum()
-    manual_loss = (easy_triplet_loss + criterion.hn_lambda * hard_triplet_loss) / 6.0 
+    manual_loss = (easy_triplet_loss + criterion.hn_lambda * hard_triplet_loss) / 6.0
     assert torch.allclose(loss, manual_loss)
 
-def test_cross_entropy_loss():
-    criterion = SelectivelyContrastiveLoss(xent_only=True, softmax_all=True)
-    embeddings = torch.tensor(
-        [angle_to_coord(float(a)) for a in [10, 15, 25, 35, 40, 80]]
-    )
-    labels = torch.tensor([0, 0, 1, 1, 2, 2])
-    key_embeddings = torch.tensor(
-        [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
-    )
-    loss, _ = criterion(embeddings, labels, key_embeddings, labels)
-    assert torch.isclose(loss, torch.tensor(1.0866, dtype=loss.dtype), atol=1e-7, rtol=1e-4)
 
 def test_moco_cross_entropy_loss():
     criterion = MoCoCrossEntropyLoss(temperature=0.1)
@@ -177,4 +171,6 @@ def test_moco_cross_entropy_loss():
         [angle_to_coord(float(a)) for a in [16, 14, 26, 34, 20, 70]]
     )
     loss, _ = criterion(embeddings, labels, key_embeddings, labels)
-    assert torch.isclose(loss, torch.tensor(1.0866, dtype=loss.dtype), atol=1e-7, rtol=1e-4)
+    assert torch.isclose(
+        loss, torch.tensor(1.0866, dtype=loss.dtype), atol=1e-7, rtol=1e-4
+    )
