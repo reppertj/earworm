@@ -276,3 +276,6 @@ pip-selfcheck.json
 
 # Ingestion scripts and exploration
 ingestion
+
+# Serialized models, etc.
+modeling/binaries
