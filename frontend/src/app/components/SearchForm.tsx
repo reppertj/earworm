@@ -7,12 +7,17 @@ import React, {
 } from 'react';
 
 import { useDropzone, FileError } from 'react-dropzone';
-import getChannelDataAndSampleRate, { FullAudioData } from './offlineAudio';
-import { UploadSurferPair } from './surfer';
+import getChannelDataAndSampleRate, {
+  FullAudioData,
+} from '../utils/audioUtils';
+import { UploadSurferPair } from './UploadSurfer';
 import ErrorSnackBar from './ErrorSnackBar';
 import SpotifySearchForm from './SpotifySearchForm';
 import SpotifyAuthorizationButton from './SpotifyAuthorizationButton';
-import { SpotifyChooser } from './spotify';
+import { SpotifyChooser } from './SpotifyResultChooser';
+import Worker from '../worker';
+
+var inferenceWorker = new Worker();
 
 interface RegionStart {
   id: number;
@@ -78,19 +83,9 @@ async function getMaybeMultipleChannelData(sources: Sources): Promise<Sources> {
     }
   }
   return newSources;
-
-  // function makeNewInferenceInfo(sources: Source[]) {
-  //   const info: {}[] = [];
-  //   for (let source of sources) {
-  //     if (source) {
-  //       const id = Date.now();
-  //       info.push({ id, regions: [], ready: false });
-  //     }
-  //   }
-  //   return [info, sources];
 }
 
-function InputWindow(props) {
+function MusicSearchForm(props) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [tokenExpiryDate, setTokenExpiryDate] = useState<number | null>(null);
@@ -100,19 +95,23 @@ function InputWindow(props) {
   const [sources, setSources] = useState<Sources>([null, null]);
   const [filesLeft, setFilesLeft] = useState(2);
 
-  const addSourceIfSpace = (sourceData: string | File) => {
-    let newSources = sources.slice();
-    const openPosition = newSources.findIndex(elem => elem === null);
-    if (openPosition !== -1) {
+  const addSourceIfSpace = useCallback(
+    (sourceData: string | File) => {
+      let newSources = sources.slice();
+      let openPosition = newSources.findIndex(elem => elem === null);
+      if (openPosition === -1) {
+        openPosition = newSources.length - 1;
+      }
       newSources[openPosition] = {
         id: Date.now(),
         source: sourceData,
         regionStarts: [],
       };
-    }
-    setSources(newSources);
-    setFilesLeft(newSources.filter(source => source === null).length);
-  };
+      setSources(newSources);
+      setFilesLeft(newSources.filter(source => source === null).length);
+    },
+    [sources],
+  );
 
   const removeSource = useCallback(
     (sourcePosition: number) => {
@@ -173,15 +172,6 @@ function InputWindow(props) {
     }
   }, [spotifyResults, chooserOpen]);
 
-  const makeSelection = (selectedUrl: string) => {};
-
-  // if (spotifyResults.tracks && spotifyResults.tracks.items.length > 0) {
-  //   if (!chooserOpen) {
-  //     setChooserOpen(true);
-  //   }
-  // }
-
-  // console.log("render condition", spotifyResults?.tracks?.items?.length > 0)
   return (
     <>
       <UploadWindow
@@ -339,6 +329,7 @@ function UploadWindow(props: UploadWindowProps) {
           {props.SpotifyElement}
           <SearchWindow
             sources={sources}
+            setSources={setSources}
             removeSource={removeSource}
             regionStartCallbacks={{
               removeRegionStart,
@@ -354,14 +345,11 @@ function UploadWindow(props: UploadWindowProps) {
 
 function SearchWindow(props) {
   const [regions, setRegions] = useState({ 0: [], 1: [] });
-  // const [inferenceInfo, setInferenceInfo] = useState(
-  //   makeNewInferenceInfo(props.sources),
-  // );
   const sources: Sources = props.sources;
-  //   () => {[
-  //   { sourceID: null, source: props.source[0], regionStarts: [] },
-  //   { sourceID: null, regionStarts: [] },
-  // ]})())
+
+  useEffect(() => {
+    inferenceWorker.warmupModels();
+  });
 
   useEffect(() => {
     getMaybeMultipleChannelData(sources).then(sources => {
@@ -375,17 +363,31 @@ function SearchWindow(props) {
           });
         }
       }
-      var inferenceWorker = new Worker('./inferenceWorker.js');
-      inferenceWorker.postMessage({ sourcesNoFile });
+      const processed: Promise<Float32Array | undefined> = new Promise(
+        async resolve => {
+          if (
+            sourcesNoFile[0] !== null &&
+            sourcesNoFile[0]?.regionStarts[0] !== undefined
+          ) {
+            const resampledData = await inferenceWorker.downsampleSource(
+              sourcesNoFile[0] as Source,
+              0,
+            );
+            const embeddings = await inferenceWorker.runInference(
+              resampledData,
+              4,
+            );
+            console.log(embeddings);
+            resolve(embeddings);
+          }
+        },
+      );
     });
   }, [sources]);
-
-  // useEffect(() => console.log(regions), [regions]);
 
   const handleSearchClick = ev => {
     const sources = props.sources;
     const startPoints = prepareRegionInfo(props.sources, regions);
-    console.log(startPoints);
   };
 
   return (
@@ -402,5 +404,5 @@ function SearchWindow(props) {
   );
 }
 
-export { InputWindow };
+export default MusicSearchForm;
 export type { Source, RegionStart };

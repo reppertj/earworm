@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 
 interface Props {
   audioElementRef: React.MutableRefObject<HTMLAudioElement | null>;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugin/wavesurfer.regions';
-import { Source, RegionStart } from './uploader';
+import { Source } from './SearchForm';
 
 const makeSurferOptions = (ref: HTMLDivElement) => ({
   container: ref,
@@ -11,6 +11,7 @@ const makeSurferOptions = (ref: HTMLDivElement) => ({
   barWidth: 2,
   barHeight: 1,
   responsive: true,
+  interact: true,
   scrollParent: true,
   height: 100,
   normalize: true,
@@ -126,9 +127,9 @@ function UploadSurfer(props) {
   const [regions, setRegions] = useState(props.regions);
   const [loaded, setLoaded] = useState(false);
 
+  const surferID = props.surferID;
   const source =
     props.source?.source === undefined ? null : props.source.source;
-  const surferID = props.surferID;
 
   // Create new instance on mount and when source changes
   useEffect(() => {
@@ -143,6 +144,7 @@ function UploadSurfer(props) {
         wavesurfer.current.loadBlob(source);
       }
     }
+    console.log(wavesurfer.current);
     return () => {
       if (wavesurfer.current) {
         wavesurfer.current?.destroy();
@@ -150,6 +152,7 @@ function UploadSurfer(props) {
         setRegions(props.regions);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, surferID]);
 
   useEffect(() => {
@@ -193,12 +196,6 @@ function UploadSurfer(props) {
     }
     props.removeSource();
   }
-
-  // useEffect(() => {
-  //   if (waveformRef.current) {
-  //     props.onRegionUpdate()
-  //   }
-  // }, [props.n_regions]);
 
   const handlePlayPause = () => {
     if (wavesurfer.current) {
@@ -256,8 +253,4 @@ function UploadSurfer(props) {
   );
 }
 
-function ResultSurfer(props) {
-  return <></>;
-}
-
-export { UploadSurferPair, ResultSurfer };
+export { UploadSurferPair };

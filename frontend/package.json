@@ -7,6 +7,7 @@
     "@material-ui/icons": "4.11.2",
     "@material-ui/lab": "4.0.0-alpha.57",
     "@reduxjs/toolkit": "1.5.0",
+    "@tensorflow/tfjs": "3.3.0",
     "@testing-library/jest-dom": "5.11.4",
     "@testing-library/react": "11.0.2",
     "@types/fontfaceobserver": "0.0.6",
@@ -134,6 +135,6 @@
   },
   "devDependencies": {
     "@types/wavesurfer.js": "3.3.2",
-    "worker-loader": "3.0.8"
+    "comlink-loader": "2.0.0"
   }
 }
