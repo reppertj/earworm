@@ -12,14 +12,22 @@ import Dialog from '@material-ui/core/Dialog';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import DialogActions from '@material-ui/core/DialogActions';
 import DialogContent from '@material-ui/core/DialogContent';
+import Grid from '@material-ui/core/Grid';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
 import ListItemAction from '@material-ui/core/ListItemSecondaryAction';
 import PlayCircleOutlineIcon from '@material-ui/icons/PlayCircleOutline';
 import PauseCircleOutlineIcon from '@material-ui/icons/PauseCircleOutline';
+import Typography from '@material-ui/core/Typography';
+import Tooltip from '@material-ui/core/Tooltip';
+import makeStyles from '@material-ui/core/styles/makeStyles';
 import Radio from '@material-ui/core/Radio';
 import AudioButton from './AudioButton';
+
+const useStyles = makeStyles(theme => ({
+  listItem: { cursor: 'pointer' },
+}));
 
 function removeUnpreviewableItems(items: any[]): any[] {
   return items.filter(item => {
@@ -50,14 +58,22 @@ function getInfo(item, index: number): SpotifyResult {
 interface ResultListItemProps {
   item: SpotifyResult;
   selectedValue: number;
-  handleChange:
-    | ((event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => void)
-    | undefined;
+  handleChange;
+  currentlyPlayingRef: unknown;
+  setCurrentlyPlayingRef: React.Dispatch<unknown>;
 }
 
 function ResultListItem(props: ResultListItemProps) {
+  const classes = useStyles();
+
   const [isPlaying, setIsPlaying] = useState(false);
-  const { item, selectedValue, handleChange } = props;
+  const {
+    item,
+    selectedValue,
+    handleChange,
+    currentlyPlayingRef,
+    setCurrentlyPlayingRef,
+  } = props;
   const primaryText = item.name ? item.name : 'untitled';
   var secondaryText = (item.artist ? item.artist : 'unknown artist') + ' ⸱ ';
   secondaryText += item.album ? item.album : 'unknown album';
@@ -75,19 +91,18 @@ function ResultListItem(props: ResultListItemProps) {
   const playEvent = useCallback(() => {
     if (audioElementRef.current) {
       audioElementRef.current.play();
+      setCurrentlyPlayingRef(audioElementRef.current);
+      item.playing = true;
+      setIsPlaying(true);
     }
-    item.playing = true;
-    setIsPlaying(true);
-    console.log('play clicked');
-  }, [item, setIsPlaying]);
+  }, [item, setIsPlaying, setCurrentlyPlayingRef]);
 
   const pauseEvent = useCallback(() => {
     if (audioElementRef.current) {
       audioElementRef.current.pause();
+      item.playing = false;
+      setIsPlaying(false);
     }
-    item.playing = false;
-    setIsPlaying(false);
-    console.log('pause clicked');
   }, [item, setIsPlaying]);
 
   const PlayPauseIcon = useMemo(() => {
@@ -96,19 +111,26 @@ function ResultListItem(props: ResultListItemProps) {
     );
   }, [isPlaying]);
 
-  const audioElement = audioElementRef.current;
+  const handleClick = () => {
+    handleChange({ target: { value: item.key.toString() } });
+  };
 
   useEffect(() => {
+    const audioElement = audioElementRef.current;
     if (audioElement) {
       audioElement.addEventListener('play', playEvent);
       audioElement.addEventListener('pause', pauseEvent);
+      if (audioElement !== currentlyPlayingRef) {
+        pauseEvent();
+      }
     }
-  }, [audioElement, pauseEvent, playEvent]);
+  }, [pauseEvent, playEvent, currentlyPlayingRef]);
 
   return (
     <ListItem key={item.key}>
       {/* <ListItemIcon> */}
       <Radio
+        color="secondary"
         checked={selected}
         onChange={handleChange}
         value={item.key}
@@ -116,6 +138,8 @@ function ResultListItem(props: ResultListItemProps) {
       />
       {/* </ListItemIcon> */}
       <ListItemText
+        className={classes.listItem}
+        onClick={handleClick}
         primary={primaryText}
         secondary={secondaryText}
       ></ListItemText>
@@ -139,12 +163,13 @@ interface SpotifyChooserProps {
   setSpotifyResults: React.Dispatch<any>;
   open: true;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  addSourceIfSpace: (sourceData: string | File) => void;
+  addSources: (sourceData: Array<string | File>) => void;
 }
 
 export function SpotifyChooser(props: SpotifyChooserProps) {
   const [selectedValue, setSelectedValue] = useState<number>(0);
-  const { open, setOpen, addSourceIfSpace } = props;
+  const [currentlyPlayingRef, setCurrentlyPlayingRef] = useState<unknown>(null);
+  const { open, setOpen, addSources } = props;
 
   const items: Array<any> = props.spotifyResults.tracks.items;
   const processed = removeUnpreviewableItems(items).map(getInfo).slice(0, 20);
@@ -164,7 +189,7 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
     const previewUrl = processed.filter(item => item.key === selectedValue)[0]
       .previewUrl;
     if (previewUrl) {
-      addSourceIfSpace(previewUrl);
+      addSources([previewUrl]);
     }
     setOpen(false);
     props.setSpotifyResults(null);
@@ -172,9 +197,11 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
 
   const ResultListItems = processed.map(item =>
     ResultListItem({
-      item: item,
-      handleChange: handleChange,
-      selectedValue: selectedValue,
+      item,
+      handleChange,
+      selectedValue,
+      currentlyPlayingRef,
+      setCurrentlyPlayingRef,
     }),
   );
   console.log(processed);
@@ -187,7 +214,22 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
         maxWidth="lg"
         open={open}
       >
-        <DialogTitle>Select a song</DialogTitle>
+        <DialogTitle>
+          <Grid container justify="space-between">
+            <Grid item>Select a song</Grid>
+            <Grid item>
+              <Tooltip
+                disableFocusListener
+                interactive
+                title={
+                  "I can only analyze tracks for which Spotify provides a 30 second preview, but Spotify doesn't provide this preview for all tracks."
+                }
+              >
+                <Typography variant="caption">Something missing?</Typography>
+              </Tooltip>
+            </Grid>
+          </Grid>
+        </DialogTitle>
         <DialogContent dividers={true}>
           <List dense={true}>{ResultListItems}</List>
         </DialogContent>

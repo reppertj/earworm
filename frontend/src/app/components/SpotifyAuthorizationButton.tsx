@@ -1,4 +1,10 @@
 import React, { useEffect } from 'react';
+
+import Button from '@material-ui/core/Button';
+import useTheme from '@material-ui/core/styles/useTheme';
+
+import SpotifyIcon from './SpotifyIcon';
+
 import {
   getHashParams,
   removeHashParamsFromUrl,
@@ -24,6 +30,8 @@ interface Props {
 }
 
 export default function SpotifyAuthorizationButton(props: Props) {
+  const theme = useTheme();
+
   (ls as any).backend(localStorage);
   console.log(ls);
   useEffect(() => {
@@ -71,12 +79,19 @@ export default function SpotifyAuthorizationButton(props: Props) {
   return (
     <div>
       {
-        <button
+        <Button
+          variant="contained"
+          color="primary"
           aria-label="Authorize Spotify account using OAuth 2.0"
           onClick={ev => handleRedirect(ev)}
         >
-          or use your Spotify account
-        </button>
+          or connect your Spotify&nbsp;
+          <SpotifyIcon
+            iconProps={{ fontSize: 'small' }}
+            fillColor={theme.palette.primary.contrastText}
+          />
+          &nbsp;account
+        </Button>
       }
     </div>
   );

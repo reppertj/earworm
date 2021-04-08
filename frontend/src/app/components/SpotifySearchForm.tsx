@@ -108,7 +108,7 @@ export default function SearchButton(props: Props) {
             <TextField
               id="standard-search"
               fullWidth
-              label="Search Spotify"
+              label="Search on Spotify"
               defaultValue={searchInput}
               type="search"
               onChange={ev => handleSearchChange(ev)}
@@ -121,7 +121,7 @@ export default function SearchButton(props: Props) {
               aria-label="search for a song on Spotify"
               onClick={ev => initiateGetResult(ev)}
             >
-              <SpotifyIcon />
+              <SpotifyIcon iconProps={{}} fillColor={undefined} />
               {progress && (
                 <CircularProgress
                   size={27}
