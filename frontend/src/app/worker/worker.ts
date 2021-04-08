@@ -21,7 +21,8 @@ async function downloadModels() {
     encodingModel = await tf.loadGraphModel(encodingModelUrl);
     embeddingModel = await tf.loadGraphModel(embeddingModelUrl);
     return true;
-  } catch {
+  } catch (err) {
+    console.log('Error downloading models:', err);
     downloadError = true;
   }
 }
@@ -48,6 +49,7 @@ export async function warmupModels() {
       await downloadModels();
     }
     try {
+      const start = Date.now();
       const WAVEFORM_SHAPE = [1, 22050 * 3];
       const warmed_sgram = (await spectrogramModel.executeAsync(
         { 'input_1:0': tf.zeros(WAVEFORM_SHAPE) },
@@ -65,9 +67,16 @@ export async function warmupModels() {
       tf.dispose(warmed_encoding);
       tf.dispose(warmed_embedding);
       warmedUp = true;
+      const end = Date.now();
+      console.log(
+        `Warmed up models using ${tf.getBackend()} backend in ${
+          end - start
+        } ms`,
+      );
       return true;
-    } catch {
-      console.log('Error warming up models');
+    } catch (err) {
+      console.log('Error warming up models:', err);
+      return false;
     }
   } else {
     return true;
@@ -77,9 +86,19 @@ export async function warmupModels() {
 async function prepareTensor(channelArray: Float32Array[]): Promise<tf.Tensor> {
   const inputShape = [channelArray.length, channelArray[0].length];
   const tensorNd = tf.tensor(channelArray, inputShape);
-  const tensor = tf.mean(tensorNd, 0, true);
-  tf.dispose(tensorNd);
-  return tensor;
+  const tensor2d = tf.mean(tensorNd, 0, true);
+  tf.dispose(tensorNd); // Manual memory management using webgl backend
+
+  // Because of rounding, the tensor size may be off by 1 along dim 1; we'll just zero-pad it
+  if (inputShape[1] === 22049) {
+    const pad = tf.zeros([1, 1], 'float32');
+    const padded = tf.concat([tensor2d, pad], 1);
+    tf.dispose(tensor2d);
+    tf.dispose(pad);
+    return padded;
+  } else {
+    return tensor2d;
+  }
 }
 
 export async function runInference(
@@ -90,7 +109,7 @@ export async function runInference(
     if (getDownloadStatus() !== 'downloaded') {
       await downloadModels();
     }
-    console.log('Inference using backend:', tf.getBackend());
+    const start = Date.now();
     const inputTensor = await prepareTensor(channelArray);
     const sgram = (await spectrogramModel.executeAsync(
       { 'input_1:0': inputTensor },
@@ -109,29 +128,56 @@ export async function runInference(
     const embeddingsData = await embedded.data();
     tf.dispose(embedded);
     warmedUp = true;
+    const end = Date.now();
+    console.log(
+      `Ran inference using ${tf.getBackend()} backend in ${end - start} ms`,
+    );
     return embeddingsData;
-  } catch {
-    console.log('Error running inference');
+  } catch (err) {
+    console.log('Error running inference:', err);
   }
 }
 
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min) + min);
+}
+
 export function downsampleSource(source: Source, regionStartIndex: number) {
-  const { channelData, regionStarts } = source;
-  const regionStartSeconds = regionStarts[regionStartIndex].seconds;
-  const resampledAudioData: Float32Array[] = [];
-  if (channelData) {
-    const [channeledAudioData, sampleRate] = channelData;
-    for (let channel of channeledAudioData) {
-      const sliced = channel.slice(
-        sampleRate * regionStartSeconds,
-        sampleRate * (regionStartSeconds + 3),
-      );
-      const resampled = resample(sliced, sampleRate, 22050, {
-        method: 'sinc',
-      });
-      const resampledAsF32 = Float32Array.from(resampled);
-      resampledAudioData.push(resampledAsF32);
+  try {
+    const { channelData, regionStarts } = source;
+    var regionStartSeconds: number;
+    if (regionStarts[regionStartIndex] !== undefined) {
+      regionStartSeconds = regionStarts[regionStartIndex].seconds;
+    } else {
+      if (channelData) {
+        const [channeledAudioData, sampleRate] = channelData;
+        const numSamples = channeledAudioData[0].length;
+        const startAt = getRandomInt(0, numSamples - 3 * sampleRate);
+        regionStartSeconds = Math.floor(startAt / sampleRate);
+        console.log(regionStartSeconds);
+      } else {
+        regionStartSeconds = 0;
+      }
     }
+    const resampledAudioData: Float32Array[] = [];
+    if (channelData) {
+      const [channeledAudioData, sampleRate] = channelData;
+      for (let channel of channeledAudioData) {
+        const sliced = channel.slice(
+          sampleRate * regionStartSeconds,
+          sampleRate * (regionStartSeconds + 3),
+        );
+        const resampled = resample(sliced, sampleRate, 22050, {
+          method: 'sinc',
+        });
+        const resampledAsF32 = Float32Array.from(resampled);
+        resampledAudioData.push(resampledAsF32);
+      }
+      return resampledAudioData;
+    }
+  } catch (err) {
+    console.log('Error downsampling', err);
   }
-  return resampledAudioData;
 }

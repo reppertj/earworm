@@ -1,6 +1,7 @@
 interface RegionStart {
   id: number;
   seconds: number;
+  preference: number;
 }
 
 interface Source {
@@ -16,7 +17,7 @@ declare module 'comlink-loader!*' {
 
     // Add declarations here; return type should be wrapped in a promise
 
-    warmupModels(): Promise<void>;
+    warmupModels(): Promise<boolean>;
     downsampleSource(
       source: Source,
       regionStartIdx: number,
