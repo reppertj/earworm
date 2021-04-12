@@ -262,6 +262,7 @@ pip-selfcheck.json
 
 # production
 **/build/**
+docker-stack.yml
 
 # misc
 **/**.DS_Store

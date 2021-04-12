@@ -36,6 +36,7 @@ DEFAULT_HPARAMS = OmegaConf.create(
         "learning_rate": 0.015,
         "final_learning_rate": 0.01,  # only applies to adagrad
         "momentum": 0.9,  # only applies to optimizers with momentum
+        "weight_decay": 1e-4,
         "batch_size": 640,
         "epoch_length": (640 * 180),  # epochs are made up anyways
         "m_per_class": 32,
@@ -676,15 +677,16 @@ class MusicMetricLearner(pl.LightningModule):
         lr = self.hparams.conf.learning_rate
         final_lr = self.hparams.conf.final_learning_rate
         momentum = self.hparams.conf.momentum
-        if self.hparams.conf.ptimizer == "adabound":
+        weight_decay = self.hparams.conf.weight_decay
+        if self.hparams.conf.optimizer == "adabound":
             opt = AdaBound(self.parameters(), lr=lr, final_lr=final_lr)
         elif self.hparams.conf.optimizer == "adam":
             opt = torch.optim.Adam(self.parameters(), lr=lr)
         elif self.hparams.conf.optimizer == "sgd":
             opt = torch.optim.SGD(
-                self.parameters(), lr=lr, momentum=momentum, nesterov=True
+                self.parameters(), lr=lr, momentum=momentum, nesterov=True, weight_decay=weight_decay
             )
-            max_steps = 160 * (
+            max_steps = 60 * (
                 self.hparams.conf.epoch_length // self.hparams.conf.batch_size
             )
             sched = torch.optim.lr_scheduler.OneCycleLR(
