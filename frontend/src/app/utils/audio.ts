@@ -34,6 +34,10 @@ function makeRequest(method: string, url: string): Promise<ArrayBuffer> {
   });
 }
 
+/**
+ * Get an audio buffer from a file or url
+ * @param source    Blob or url
+ */
 async function makeAudioBuffer(source: File | string): Promise<AudioBuffer> {
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   let audioData: Promise<ArrayBuffer>;
@@ -46,6 +50,13 @@ async function makeAudioBuffer(source: File | string): Promise<AudioBuffer> {
   return audioBuffer;
 }
 
+/**
+ * Retrieve array containing typed arrys of waveform data
+ * (one per channel in the source)
+ * and the sample rate as determined by the webaudio API
+ * @param source    blob or url
+ * @returns
+ */
 export default async function getChannelDataAndSampleRate(
   source: File | string,
 ): Promise<FullAudioData> {

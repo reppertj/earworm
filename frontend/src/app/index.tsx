@@ -8,24 +8,28 @@
 
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Switch, Route, BrowserRouter } from 'react-router-dom';
+import { ConnectedRouter } from 'connected-react-router';
+import { Switch, Route } from 'react-router-dom';
 
 import { unstable_createMuiStrictModeTheme as createMuiTheme } from '@material-ui/core';
-import Typography from '@material-ui/core/Typography';
 import { ThemeProvider } from '@material-ui/core/styles';
-import makeStyles from '@material-ui/core/styles/makeStyles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 
-import { Player } from './pages/Player/Loadable';
+import { HomePage } from './pages/HomePage/Loadable';
+import { Admin } from './pages/Admin';
+import { Login } from './pages/Login/Loadable';
 import { NotFoundPage } from './components/NotFoundPage/Loadable';
 import { useTranslation } from 'react-i18next';
 
-import Copyright from './components/Copyright';
+import { Protected } from './components/Protected';
 import { GlobalStyle } from 'styles/global-styles';
+import { logout } from './utils/auth';
+import { PrivateRoute } from './components/PrivateRoute';
+import history from './utils/history';
 
 const theme = createMuiTheme({
   palette: {
@@ -38,19 +42,12 @@ const theme = createMuiTheme({
   },
 });
 
-const useStyles = makeStyles(theme => ({
-  footer: {
-    backgroundColor: theme.palette.background.paper,
-    padding: theme.spacing(2),
-  },
-}));
-
 export function App() {
-  const classes = useStyles();
   const { i18n } = useTranslation();
+  console.log('history before', history);
   return (
     <>
-      <BrowserRouter>
+      <ConnectedRouter history={history}>
         <CssBaseline />
         <GlobalStyle />
         <Helmet
@@ -69,29 +66,23 @@ export function App() {
         </Helmet>
 
         <ThemeProvider theme={theme}>
-          <main>
-            <Switch>
-              {/* <Route exact path="/" component={HomePage} /> */}
-              <Route exact path="/" component={Player} />
-              <Route component={NotFoundPage} />
-            </Switch>
-          </main>
+          <Switch>
+            <Route path="/admin" render={() => <Admin />} />
+            <Route path="/login" component={Login} />
+            <Route
+              path="/logout"
+              render={() => {
+                logout();
+                history.push('/');
+                return null;
+              }}
+            />
+            <PrivateRoute path="/protected" component={Protected} />
+            <Route exact path="/" component={HomePage} />
+            <Route component={NotFoundPage} />
+          </Switch>
         </ThemeProvider>
-      </BrowserRouter>
-      <footer className={classes.footer}>
-        <Typography variant="h6" align="center" gutterBottom>
-          Footer
-        </Typography>
-        <Typography
-          variant="subtitle1"
-          align="center"
-          color="textSecondary"
-          component="p"
-        >
-          Something here to give the footer a purpose!
-        </Typography>
-        <Copyright />
-      </footer>
+      </ConnectedRouter>
     </>
   );
 }

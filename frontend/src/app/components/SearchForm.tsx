@@ -9,9 +9,7 @@ import Button from '@material-ui/core/Button';
 import CloudUploadIcon from '@material-ui/icons/CloudUpload';
 
 import { useDropzone } from 'react-dropzone';
-import getChannelDataAndSampleRate, {
-  FullAudioData,
-} from '../utils/audioUtils';
+import getChannelDataAndSampleRate, { FullAudioData } from '../utils/audio';
 import { UploadSurferPair } from './UploadSurfer';
 import ErrorSnackBar from './ErrorSnackBar';
 import SpotifySearchForm from './SpotifySearchForm';
@@ -312,7 +310,7 @@ function UploadWindow(props: UploadWindowProps) {
                 container
                 item
                 justify="center"
-                alignItems="flex-end"
+                alignItems="center"
                 spacing={5}
               >
                 <Grid item>
@@ -325,9 +323,7 @@ function UploadWindow(props: UploadWindowProps) {
                     Search by mp3 ({filesLeft})
                   </Button>
                 </Grid>
-                <Grid item xl>
-                  {props.SpotifyElement}
-                </Grid>
+                <Grid item>{props.SpotifyElement}</Grid>
               </Grid>
             </Box>
             <Grid container item spacing={1}>

@@ -13,10 +13,9 @@ tf.enableProdMode();
 
 async function downloadModels() {
   try {
-    const spectrogramModelUrl =
-      'http://127.0.0.1:8081/MAKE_SPECTROGRAM/model.json';
-    const encodingModelUrl = 'http://127.0.0.1:8081/MAKE_ENCODING/model.json';
-    const embeddingModelUrl = 'http://127.0.0.1:8081/MAKE_EMBEDDING/model.json';
+    const spectrogramModelUrl = '/embeddings/tfjs/MAKE_SPECTROGRAM/model.json';
+    const encodingModelUrl = '/embeddings/tfjs/MAKE_ENCODING/model.json';
+    const embeddingModelUrl = '/embeddings/tfjs/MAKE_EMBEDDING/model.json';
     spectrogramModel = await tf.loadGraphModel(spectrogramModelUrl);
     encodingModel = await tf.loadGraphModel(encodingModelUrl);
     embeddingModel = await tf.loadGraphModel(embeddingModelUrl);
@@ -89,7 +88,10 @@ async function prepareTensor(channelArray: Float32Array[]): Promise<tf.Tensor> {
   const tensor2d = tf.mean(tensorNd, 0, true);
   tf.dispose(tensorNd); // Manual memory management using webgl backend
 
-  // Because of rounding, the tensor size may be off by 1 along dim 1; we'll just zero-pad it
+  // Because of rounding, the waveform length may be 1 sample shy
+  // interestingly, this only seems to happen on Chrome
+  // We'll just zero-pad it
+
   if (inputShape[1] === 22049) {
     const pad = tf.zeros([1, 1], 'float32');
     const padded = tf.concat([tensor2d, pad], 1);
@@ -101,6 +103,17 @@ async function prepareTensor(channelArray: Float32Array[]): Promise<tf.Tensor> {
   }
 }
 
+/**
+ * Prepares tfjs tensors from waveform data, then
+ * runs full inference on all three models:
+ * 1. Spectrogram - DB-scaled MEL spectrogram
+ * 2. Encoding - CNN based on MobileNetV2
+ * 3. Embedding - MLP that takes encoding output and "word" embedding
+ * with the preference scalar as inputs and produces an embedding
+ * @param channelArray Array of waveform data (one per channel)
+ * @param preference Single integer input to the embedding model
+ * @returns
+ */
 export async function runInference(
   channelArray: Float32Array[],
   preference: number,

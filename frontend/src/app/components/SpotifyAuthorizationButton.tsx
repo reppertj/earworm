@@ -9,7 +9,7 @@ import {
   getHashParams,
   removeHashParamsFromUrl,
   getAuthorizeHref,
-} from '../utils/apiUtils';
+} from '../utils/spotify';
 import ls from 'local-storage';
 
 const authEndpoint = 'https://accounts.spotify.com/authorize';
