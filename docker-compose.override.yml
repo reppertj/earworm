@@ -48,6 +48,7 @@ services:
     environment:
       - JUPYTER=jupyter lab --ip=0.0.0.0 --allow-root --NotebookApp.custom_display_url=http://127.0.0.1:8888
       - SERVER_HOST=http://${DOMAIN?Variable not set}
+      - SQLALCHEMY_ECHO=true
     build:
       context: ./backend
       dockerfile: backend.dockerfile
@@ -63,12 +64,15 @@ services:
       - traefik.http.services.${STACK_NAME?Variable not set}-backend.loadbalancer.server.port=80
 
   celeryworker:
+    ports:
+      - "8889:8889"
     volumes:
       - ./backend/app:/app
     environment:
-      - RUN=watchmedo auto-restart --directory=./ --pattern=*.py --recursive -- celery --app app.worker worker --loglevl=DEBUG -Q main-queue -c 1
-      - JUPYTER=jupyter lab --ip=0.0.0.0 --allow-root --NotebookApp.custom_display_url=http://127.0.0.1:8888
+      - RUN=watchmedo auto-restart --directory=./ --pattern=*.py --recursive -- celery --app app.worker worker --loglevel=DEBUG -Q main-queue -c 1
+      - JUPYTER=jupyter lab --ip=0.0.0.0 --port=8889 --allow-root --NotebookApp.custom_display_url=http://127.0.0.1:8888
       - SERVER_HOST=http://${DOMAIN?Variable not set}
+      - SQLALCHEMY_ECHO=true
     build:
       context: ./backend
       dockerfile: celeryworker.dockerfile
