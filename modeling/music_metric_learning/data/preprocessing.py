@@ -159,6 +159,7 @@ class WaveformToDBSpectrogram(nn.Module):
 
     def from_path(self, path: str, return_two=False, return_mfcc=False):
         logger.info(f"Processing {path} to tensor of spectrogram")
+        # This comes in -1, 1 normalized
         waveform, inp_freq = torchaudio.load(path)
         waveform = waveform.mean(dim=0, keepdims=True)
         waveform = Resample(inp_freq, self.sample_rate)(waveform)
