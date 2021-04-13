@@ -32,16 +32,25 @@ class Settings(BaseSettings):
         if len(v) == 0:
             return None
         return v
+
+    S3_KEY: Optional[str] = None
+    S3_SECRET: Optional[str] = None
+    S3_REGION_NAME: Optional[str] = None
+    S3_ENDPOINT_URL: Optional[str] = None
+    S3_PREVIEW_BUCKET: Optional[str] = None
     
-    AWS_S3_KEY: Optional[str] = None
-    AWS_S3_SECRET: Optional[str] = None
-    AWS_S3_PREVIEW_BUCKET: Optional[str] = None
+    
+    SPEC_MODEL_PATH = 'app/embeddings/tflite/MAKE_SPECTROGRAM_tf_saved_model'
+    ENCODE_MODEL_PATH = 'app/embeddings/tflite/MAKE_ENCODING_tf_saved_model'
+    EMBED_MODEL_PATH = 'app/embeddings/tflite/MAKE_EMBEDDING_tf_saved_model'
+
 
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
+    SQLALCHEMY_ECHO: bool = False
 
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
