@@ -12,5 +12,5 @@ if TYPE_CHECKING:
 class License(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    external_link = Column(String, nullable=False)
+    url = Column(String, nullable=False)
     tracks = relationship("Track", back_populates="license")

@@ -33,16 +33,20 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
         obj_in_data = jsonable_encoder(obj_in)
+        raise Exception(f"Data at create: {obj_in_data}")
         db_obj = self.model(**obj_in_data)  # type: ignore
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
-    
-    def create_multi(self, db: Session, *, objs_in: List[CreateSchemaType]) -> List[ModelType]:
+
+    def create_multi(
+        self, db: Session, *, objs_in: List[CreateSchemaType]
+    ) -> List[ModelType]:
         objs_in_data = [jsonable_encoder(obj_in) for obj_in in objs_in]
-        db_objs = [self.model(**obj_in_data) for obj_in_data in objs_in_data]
+        db_objs = [self.model(**obj_in_data) for obj_in_data in objs_in_data]  # type: ignore
         db.bulk_save_objects(db_objs, return_defaults=True)
+        db.commit()
         return db_objs
 
     def update(

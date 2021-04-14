@@ -1,3 +1,4 @@
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
@@ -5,8 +6,9 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api.api_v1.api import api_router
 from app.core.config import settings
 
+if settings.SENTRY_DSN:
+    sentry_sdk.init(settings.SENTRY_DSN)
 
-# This is a change
 
 app = FastAPI(
     title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
@@ -22,5 +24,8 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+# Route static directories
 app.mount("/embeddings", StaticFiles(directory="static/embeddings"), name="embeddings")
+
+# Route API
 app.include_router(api_router, prefix=settings.API_V1_STR)

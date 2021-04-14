@@ -40,9 +40,9 @@ class Settings(BaseSettings):
     S3_PREVIEW_BUCKET: Optional[str] = None
     
     
-    SPEC_MODEL_PATH = 'app/embeddings/tflite/MAKE_SPECTROGRAM_tf_saved_model'
-    ENCODE_MODEL_PATH = 'app/embeddings/tflite/MAKE_ENCODING_tf_saved_model'
-    EMBED_MODEL_PATH = 'app/embeddings/tflite/MAKE_EMBEDDING_tf_saved_model'
+    SPEC_MODEL_PATH = 'app/embeddings/saved_models/MAKE_SPECTROGRAM_tf_saved_model'
+    ENCODE_MODEL_PATH = 'app/embeddings/saved_models/MAKE_ENCODING_tf_saved_model'
+    EMBED_MODEL_PATH = 'app/embeddings/saved_models/MAKE_EMBEDDING_tf_saved_model'
 
 
     POSTGRES_SERVER: str

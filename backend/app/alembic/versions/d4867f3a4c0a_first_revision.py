@@ -35,7 +35,7 @@ def upgrade():
         "license",
         sa.Column("id", sa.Integer, primary_key=True),
         sa.Column("name", sa.String(), nullable=False, unique=True),
-        sa.Column("external_link", sa.String(), nullable=False),
+        sa.Column("url", sa.String(), nullable=False),
     )
     op.create_index(op.f("ix_license_id"), "license", ["id"], unique=False)
     op.create_index(op.f("ix_license_name"), "license", ["name"], unique=True)
@@ -52,8 +52,8 @@ def upgrade():
         sa.Column("id", sa.Integer, primary_key=True),
         sa.Column("title", sa.UnicodeText, nullable=False),
         sa.Column("artist", sa.UnicodeText),
-        sa.Column("internal_media_url", sa.String(512)),
-        sa.Column("external_link", sa.String(1024), nullable=False),
+        sa.Column("s3_preview_key", sa.String(512)),
+        sa.Column("url", sa.String(1024), nullable=False),
         sa.Column("license_id", sa.Integer),
         sa.Column("provider_id", sa.Integer),
         sa.ForeignKeyConstraint(["license_id"], ["license.id"]),
