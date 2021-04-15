@@ -13,9 +13,9 @@ tf.enableProdMode();
 
 async function downloadModels() {
   try {
-    const spectrogramModelUrl = '/embeddings/tfjs/MAKE_SPECTROGRAM/model.json';
-    const encodingModelUrl = '/embeddings/tfjs/MAKE_ENCODING/model.json';
-    const embeddingModelUrl = '/embeddings/tfjs/MAKE_EMBEDDING/model.json';
+    const spectrogramModelUrl = '/embeddings/MAKE_SPECTROGRAM/model.json';
+    const encodingModelUrl = '/embeddings/MAKE_ENCODING/model.json';
+    const embeddingModelUrl = '/embeddings/MAKE_EMBEDDING/model.json';
     spectrogramModel = await tf.loadGraphModel(spectrogramModelUrl);
     encodingModel = await tf.loadGraphModel(encodingModelUrl);
     embeddingModel = await tf.loadGraphModel(embeddingModelUrl);
@@ -51,7 +51,7 @@ export async function warmupModels() {
       const start = Date.now();
       const WAVEFORM_SHAPE = [1, 22050 * 3];
       const warmed_sgram = (await spectrogramModel.executeAsync(
-        { 'input_1:0': tf.zeros(WAVEFORM_SHAPE) },
+        { 'unknown:0': tf.zeros(WAVEFORM_SHAPE) },
         'Identity:0',
       )) as tf.Tensor;
       const warmed_encoding = encodingModel.execute(
@@ -125,7 +125,7 @@ export async function runInference(
     const start = Date.now();
     const inputTensor = await prepareTensor(channelArray);
     const sgram = (await spectrogramModel.executeAsync(
-      { 'input_1:0': inputTensor },
+      { 'unknown:0': inputTensor },
       'Identity:0',
     )) as tf.Tensor;
     const encoded = encodingModel.execute(
