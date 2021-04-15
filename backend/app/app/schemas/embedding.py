@@ -9,8 +9,6 @@ from .embedding_model import EmbeddingModel
 
 # Shared properties
 class EmbeddingBase(BaseModel):
-    track: Track
-    model: EmbeddingModel
     values: List[float]
     class Config:
         orm_mode = True
@@ -18,21 +16,26 @@ class EmbeddingBase(BaseModel):
 
 # Properties to receive via API on creation
 class EmbeddingCreate(EmbeddingBase):
-    pass
+    track_id: int
+    model_name: str
 
 
 # Properties to receive via API on update
 class EmbeddingUpdate(EmbeddingBase):
-    pass
+    track_id: int
 
 
 class EmbeddingInDBBase(EmbeddingBase):
-    pass
+    id: int
+    track: Track
+    model: EmbeddingModel
 
 
 # Additional properties to return via API
 class Embedding(EmbeddingBase):
     id: int
+    track: Track
+    model: EmbeddingModel
 
 
 # Special async return types

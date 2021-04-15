@@ -115,7 +115,7 @@ services:
     env_file:
       - .env
     command:
-      - "--broker=redis://redis:6379/0"
+      - "--broker=redis://queue:6379/0"
     depends_on:
       - "queue"
     deploy:

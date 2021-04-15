@@ -25,7 +25,7 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 # Route static directories
-app.mount("/embeddings", StaticFiles(directory="static/embeddings"), name="embeddings")
+app.mount("/embeddings", StaticFiles(directory="static/embeddings/tfjs"), name="embeddings")
 
 # Route API
 app.include_router(api_router, prefix=settings.API_V1_STR)

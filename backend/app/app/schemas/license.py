@@ -8,7 +8,7 @@ from .upload import UploadStatusBase
 # Shared properties
 class LicenseBase(BaseModel):
     name: str
-    external_link: HttpUrl
+    url: HttpUrl
 
     class Config:
         orm_mode = True

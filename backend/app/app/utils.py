@@ -1,12 +1,17 @@
 import logging
+import string
 from datetime import datetime, timedelta
+from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import emails
 from emails.template import JinjaTemplate
+from fastapi.encoders import jsonable_encoder
 from jose import jwt
+from pandas import read_csv
 
+from app import schemas
 from app.core.config import settings
 
 
@@ -104,3 +109,26 @@ def verify_password_reset_token(token: str) -> Optional[str]:
         return decoded_token["email"]
     except jwt.JWTError:
         return None
+
+
+def parse_csv_string(csv_string: str) -> List[Dict[str, Any]]:
+    """Returns a list of dicts corresponding to rows in that CSV"""
+    return jsonable_encoder(read_csv(StringIO(csv_string)).to_dict("records"))
+
+
+def canonical_preview_uri(
+    track: Union[
+        schemas.Track, schemas.TrackCreate, schemas.TrackInDB, schemas.TrackUpdate
+    ]
+) -> str:
+    if track.provider:
+        provider_name = track.provider.name
+    else:
+        provider_name = track.provider_name  # type: ignore
+    valid_chars = set(string.digits + string.ascii_letters + " -.")
+    return "".join(
+        filter(
+            lambda c: c in valid_chars,
+            f"{provider_name} - {track.artist} - {track.title}.mp3",
+        )
+    )[-512:]

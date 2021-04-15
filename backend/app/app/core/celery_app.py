@@ -5,3 +5,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {"app.worker.*": "main-queue"}
+celery_app.conf.broker_transport_options = {
+    "priority_steps": list(range(10)),
+    "queue_order_strategy": "priority",
+}

@@ -2,6 +2,14 @@ FROM tiangolo/uvicorn-gunicorn-fastapi:python3.8
 
 WORKDIR /app/
 
+# Install audio processing libraries
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    mediainfo \
+    sox \
+    && rm -rf /var/lib/apt/lists/*
+
+
 # Install Poetry
 RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | POETRY_HOME=/opt/poetry python && \
     cd /usr/local/bin && \
@@ -14,6 +22,7 @@ COPY ./app/pyproject.toml ./app/poetry.lock* /app/
 # Allow installing dev dependencies to run tests
 ARG INSTALL_DEV=false
 RUN bash -c "if [ $INSTALL_DEV == 'true' ] ; then poetry install --no-root ; else poetry install --no-root --no-dev ; fi"
+
 
 # For development, Jupyter remote kernel, Hydrogen
 # Using inside the container:

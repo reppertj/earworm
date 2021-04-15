@@ -6,7 +6,7 @@ from app.schemas.license import LicenseCreate, LicenseUpdate
 
 
 class CRUDLicense(CRUDBase[License, LicenseCreate, LicenseUpdate]):
-    def get_by_name(self, db: Session, name: str) -> License:
+    def get_by_name(self, db: Session, *, name: str) -> License:
         return db.query(self.model).filter(self.model.name == name).first()
 
 

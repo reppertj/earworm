@@ -38,12 +38,13 @@ class Settings(BaseSettings):
     S3_REGION_NAME: Optional[str] = None
     S3_ENDPOINT_URL: Optional[str] = None
     S3_PREVIEW_BUCKET: Optional[str] = None
-    
-    
-    SPEC_MODEL_PATH = 'app/embeddings/saved_models/MAKE_SPECTROGRAM_tf_saved_model'
-    ENCODE_MODEL_PATH = 'app/embeddings/saved_models/MAKE_ENCODING_tf_saved_model'
-    EMBED_MODEL_PATH = 'app/embeddings/saved_models/MAKE_EMBEDDING_tf_saved_model'
 
+    FALLBACK_TO_ORIGINAL_PREVIEWS: bool = False
+
+    ACTIVE_MODEL_NAME = "prelaunch-alpha"
+    SPEC_MODEL_PATH = "app/embeddings/saved_models/MAKE_SPECTROGRAM_tf_saved_model"
+    ENCODE_MODEL_PATH = "app/embeddings/saved_models/MAKE_ENCODING_tf_saved_model"
+    EMBED_MODEL_PATH = "app/embeddings/saved_models/MAKE_EMBEDDING_tf_saved_model"
 
     POSTGRES_SERVER: str
     POSTGRES_USER: str

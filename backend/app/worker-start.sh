@@ -5,7 +5,7 @@ python /app/app/celeryworker_pre_start.py
 
 if [ "$RUN" == "" ]
   then
-    celery -A app.worker worker --loglevel=INFO -Q main-queue
+    celery --app app.worker worker --loglevel=INFO -Q main-queue -c 1 --without-gossip -O fair --prefetch-multiplier 1
   else
     eval $RUN
 fi

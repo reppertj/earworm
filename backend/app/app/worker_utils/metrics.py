@@ -3,16 +3,17 @@ import numpy as np
 from geomstats.geometry.hypersphere import Hypersphere
 from geomstats.learning.frechet_mean import FrechetMean
 
-sphere = Hypersphere(dim=127)
-
+_sphere = Hypersphere(dim=127)
+_mean = FrechetMean(metric=_sphere.metric)
 
 def spherical_mean(
-    embeddings: Union[List[np.ndarray], np.ndarray],
+    embeddings: Union[List[List[float]], List[np.ndarray], np.ndarray],
     weights: Optional[np.ndarray] = None,
 ) -> np.ndarray:
-    """Expects list of (128,) embeddings or (bs, 128) array of embeddings
-    """
+    """Expects (bs, 128) structure"""
     if isinstance(embeddings, list):
-        embeddings = np.vstack(embeddings)
-    mean = FrechetMean(metric=sphere.metric)
-    return mean.fit(embeddings, weights=weights).estimate_
+        if isinstance(embeddings[0], list):
+            embeddings = np.array(embeddings, dtype=np.float32)
+        else:
+            embeddings = np.vstack(embeddings)
+    return _mean.fit(embeddings, weights=weights).estimate_

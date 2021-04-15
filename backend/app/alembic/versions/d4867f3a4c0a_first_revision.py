@@ -54,6 +54,7 @@ def upgrade():
         sa.Column("artist", sa.UnicodeText),
         sa.Column("s3_preview_key", sa.String(512)),
         sa.Column("url", sa.String(1024), nullable=False),
+        sa.Column("media_url", sa.String(1024)),
         sa.Column("license_id", sa.Integer),
         sa.Column("provider_id", sa.Integer),
         sa.ForeignKeyConstraint(["license_id"], ["license.id"]),
@@ -76,7 +77,7 @@ def upgrade():
         sa.Column("embedding_model_id", sa.Integer, nullable=False),
         sa.ForeignKeyConstraint(["track_id"], ["track.id"]),
         sa.ForeignKeyConstraint(["embedding_model_id"], ["embedding_model.id"]),
-        sa.Column("values", sa.ARRAY(sa.Float(precision=32)), nullable=False),
+        sa.Column("values", sa.ARRAY(sa.REAL()), nullable=False),
         sa.UniqueConstraint("track_id", "embedding_model_id", name="unique_embedding"),
     )
     op.create_index(

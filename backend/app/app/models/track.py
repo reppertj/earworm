@@ -17,6 +17,7 @@ class Track(Base):
     artist = Column(UnicodeText)
     s3_preview_key = Column(String)
     url = Column(String, nullable=False)
+    media_url = Column(String)
     license_id = Column(Integer, ForeignKey("license.id"))
     license = relationship("License", back_populates="tracks")
     provider_id = Column(Integer, ForeignKey("provider.id"))

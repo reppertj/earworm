@@ -9,6 +9,6 @@ from app.tests.utils.utils import random_lower_string, random_url
 
 def create_random_license(db: Session) -> models.License:
     name = random_lower_string()
-    external_link = random_url()
-    license_in = LicenseCreate(name=name, external_link=external_link)
+    url = random_url()
+    license_in = LicenseCreate(name=name, url=url)
     return crud.license.create(db=db, obj_in=license_in)

@@ -1,4 +1,4 @@
-from typing import Generator, Optional
+from typing import Generator, Optional, Literal
 import botocore
 
 import boto3
@@ -71,9 +71,10 @@ def all_keys_on_s3(
 
 
 @if_s3_setup
-def download_from_s3(key: str, filename: str):
-    """ Downloads `key` to `filename` from the bucket specified in config """
-    s3.download_file(Bucket=bucket, Key=key, Filename=filename)
+def download_from_s3(key: str, file_path: str) -> Optional[Literal[True]]:
+    """ Downloads `key` to `file_path` from the bucket specified in config """
+    s3.download_file(Bucket=bucket, Key=key, Filename=file_path)
+    return True
 
 
 @if_s3_setup

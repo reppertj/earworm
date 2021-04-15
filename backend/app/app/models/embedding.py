@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, Integer, String, ARRAY, Float
+from sqlalchemy import Column, Integer, String, ARRAY, Float, REAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.schema import ForeignKey
 
@@ -16,4 +16,4 @@ class Embedding(Base):
     track = relationship("Track", back_populates="embeddings")
     embedding_model_id = Column(Integer, ForeignKey("embedding_model.id"))
     embedding_model = relationship("Embedding_Model", back_populates="embeddings")
-    values = Column(ARRAY(Float(precision=32)), nullable=False)
+    values = Column(ARRAY(REAL), nullable=False)
