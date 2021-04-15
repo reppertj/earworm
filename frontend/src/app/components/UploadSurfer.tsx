@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 
 import Box from '@material-ui/core/Box';
 import Grid from '@material-ui/core/Grid';
@@ -11,6 +11,9 @@ import makeStyles from '@material-ui/core/styles/makeStyles';
 import createStyles from '@material-ui/core/styles/createStyles';
 import useTheme from '@material-ui/core/styles/useTheme';
 import DeleteIcon from '@material-ui/icons/DeleteOutline';
+
+import { useSelector } from 'react-redux';
+import { selectVolume } from './Playback/volumeSlice/selectors';
 
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugin/wavesurfer.regions';
@@ -167,10 +170,10 @@ interface UploadSurferProps {
   numAvailableRegions: number;
 }
 
-function UploadSurfer(props: UploadSurferProps) {
+const UploadSurfer = memo((props: UploadSurferProps) => {
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const wavesurfer = useRef<WaveSurfer | null>(null);
-  const [volume, setVolume] = useState(0.8);
+  const volume = useSelector(selectVolume).value;
   const [loaded, setLoaded] = useState(false);
 
   const {
@@ -237,7 +240,6 @@ function UploadSurfer(props: UploadSurferProps) {
     if (wavesurfer.current) {
       setLoaded(true);
       wavesurfer.current.setVolume(volume);
-      setVolume(volume);
     }
   });
 
@@ -268,10 +270,9 @@ function UploadSurfer(props: UploadSurferProps) {
     }
   };
 
-  function onVolumeChange(ev: any, newVolume: number | number[]) {
-    setVolume(newVolume as number);
-    wavesurfer.current?.setVolume(newVolume as number);
-  }
+  useEffect(() => {
+    wavesurfer.current?.setVolume(volume);
+  }, [volume]);
 
   return (
     <>
@@ -353,6 +354,6 @@ function UploadSurfer(props: UploadSurferProps) {
       </Paper>
     </>
   );
-}
+});
 
 export { UploadSurferPair };

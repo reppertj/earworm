@@ -1,4 +1,4 @@
-import { VolumeSliceState } from 'app/components/Playback/slice/types';
+import { VolumeState } from 'app/components/Playback/volumeSlice/types';
 // [IMPORT NEW CONTAINERSTATE ABOVE] < Needed for generating containers seamlessly
 
 /* 
@@ -6,6 +6,6 @@ import { VolumeSliceState } from 'app/components/Playback/slice/types';
   You have to declare them here manually
 */
 export interface RootState {
-  volumeSlice?: VolumeSliceState;
+  volume?: VolumeState;
   // [INSERT NEW REDUCER KEY ABOVE] < Needed for generating containers seamlessly
 }

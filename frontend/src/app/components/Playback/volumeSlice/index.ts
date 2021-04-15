@@ -1,21 +1,23 @@
 import { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
 import { useInjectReducer } from 'utils/redux-injectors';
-import { VolumeSliceState } from './types';
+import { VolumeState } from './types';
 
-export const initialState: VolumeSliceState = {};
+export const initialState: VolumeState = { value: 0.8 };
 
 const slice = createSlice({
-  name: 'volumeSlice',
+  name: 'volume',
   initialState,
   reducers: {
-    someAction(state, action: PayloadAction<any>) {},
+    changeVolume(state, action: PayloadAction<number>) {
+      state.value = action.payload;
+    },
   },
 });
 
-export const { actions: volumeSliceActions } = slice;
+export const { actions: volumeActions } = slice;
 
-export const useVolumeSliceSlice = () => {
+export const useVolumeSlice = () => {
   useInjectReducer({ key: slice.name, reducer: slice.reducer });
   return { actions: slice.actions };
 };
@@ -24,7 +26,7 @@ export const useVolumeSliceSlice = () => {
  * Example Usage:
  *
  * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useVolumeSliceSlice();
+ *  const { actions } = useVolumeSlice();
  *
  *  const onButtonClick = (evt) => {
  *    dispatch(actions.someAction());
