@@ -23,7 +23,7 @@ import Typography from '@material-ui/core/Typography';
 import Tooltip from '@material-ui/core/Tooltip';
 import makeStyles from '@material-ui/core/styles/makeStyles';
 import Radio from '@material-ui/core/Radio';
-import { AudioButton } from './Playback/AudioButton/AudioButton';
+import { AudioButton } from '../Playback/AudioButton/AudioButton';
 
 const useStyles = makeStyles(theme => ({
   listItem: { cursor: 'pointer' },

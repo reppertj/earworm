@@ -9,7 +9,7 @@ import { useSpotifyAuthSlice } from '../slice';
 import Button from '@material-ui/core/Button';
 import useTheme from '@material-ui/core/styles/useTheme';
 
-import SpotifyIcon from '../../SpotifyIcon';
+import SpotifyIcon from '../SpotifyIcon';
 
 import {
   getHashParams,
