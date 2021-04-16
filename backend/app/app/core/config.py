@@ -5,6 +5,8 @@ from pydantic import AnyHttpUrl, BaseSettings, EmailStr, HttpUrl, PostgresDsn, v
 
 
 class Settings(BaseSettings):
+
+    ### Server Config ###
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
@@ -25,6 +27,8 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     PROJECT_NAME: str
+
+    ### Logging/Alerting ###
     SENTRY_DSN: Optional[HttpUrl] = None
 
     @validator("SENTRY_DSN", pre=True)
@@ -33,25 +37,32 @@ class Settings(BaseSettings):
             return None
         return v
 
+    ### Object Store (S3) ###
     S3_KEY: Optional[str] = None
     S3_SECRET: Optional[str] = None
     S3_REGION_NAME: Optional[str] = None
     S3_ENDPOINT_URL: Optional[str] = None
     S3_PREVIEW_BUCKET: Optional[str] = None
 
+    # if S3 isn't available, hotlink preview mp3s? Please don't do this in production.
     FALLBACK_TO_ORIGINAL_PREVIEWS: bool = False
 
+    ### ML Models ###
     ACTIVE_MODEL_NAME = "prelaunch-alpha"
     SPEC_MODEL_PATH = "app/embeddings/saved_models/MAKE_SPECTROGRAM_tf_saved_model"
     ENCODE_MODEL_PATH = "app/embeddings/saved_models/MAKE_ENCODING_tf_saved_model"
     EMBED_MODEL_PATH = "app/embeddings/saved_models/MAKE_EMBEDDING_tf_saved_model"
 
+    ### Celery ###
+    BROKER_URL = "redis://queue:6379/0"
+    RESULT_BACKEND = "redis://queue:6379/0"
+
+    ### Database ###
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     SQLALCHEMY_DATABASE_URI: Optional[PostgresDsn] = None
-    SQLALCHEMY_ECHO: bool = False
 
     @validator("SQLALCHEMY_DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -65,6 +76,10 @@ class Settings(BaseSettings):
             path=f"/{values.get('POSTGRES_DB') or ''}",
         )
 
+    # Log all SQL queries emitted by sqlalchemy?
+    SQLALCHEMY_ECHO: bool = False
+
+    ### Email ###
     SMTP_TLS: bool = True
     SMTP_PORT: Optional[int] = None
     SMTP_HOST: Optional[str] = None
@@ -92,6 +107,8 @@ class Settings(BaseSettings):
         )
 
     EMAIL_TEST_USER: EmailStr = "test@example.com"  # type: ignore
+
+    ### Default Account ###
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
     USERS_OPEN_REGISTRATION: bool = False

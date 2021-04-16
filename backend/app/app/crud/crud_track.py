@@ -55,6 +55,9 @@ class CRUDTrack(CRUDBase[Track, TrackCreate, TrackUpdate]):
         db.refresh(db_obj)
         return db_obj
 
+    def get_multi_by_ids(self, db: Session, *, track_ids: List[int]):
+        return db.query(self.model).filter(self.model.id.in_(track_ids)).all()
+
     def get_by_title_artist_provider_name(
         self, db: Session, *, title: str, artist: str, provider_name: str
     ):

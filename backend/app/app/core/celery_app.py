@@ -1,7 +1,8 @@
 from celery import Celery
+from app.core.config import settings
 
 celery_app = Celery(
-    "worker", broker="redis://queue:6379/0", backend="redis://queue:6379/0"
+    "worker", broker=settings.BROKER_URL, backend=settings.RESULT_BACKEND
 )
 
 celery_app.conf.task_routes = {"app.worker.*": "main-queue"}

@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 
 from app.crud.base import CRUDBase
-from app.models.provider import Provider as ProviderModel
-from app.schemas.provider import Provider, ProviderCreate, ProviderUpdate
+from app.models.provider import Provider
+from app.schemas.provider import ProviderCreate, ProviderUpdate
 
 
 class CRUDProvider(CRUDBase[Provider, ProviderCreate, ProviderUpdate]):
@@ -10,4 +10,4 @@ class CRUDProvider(CRUDBase[Provider, ProviderCreate, ProviderUpdate]):
         return db.query(self.model).filter(self.model.name == name).first()
 
 
-provider = CRUDProvider(ProviderModel)
+provider = CRUDProvider(Provider)

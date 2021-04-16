@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+# This script is run by default by the base backend image
+
 # Let the DB start
 python /app/app/backend_pre_start.py
 

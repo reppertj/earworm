@@ -52,8 +52,9 @@ async def upload_providers(csv_file: UploadFile = File(...)):
     content_bytes = await csv_file.read()
     content_str = t.cast(bytes, content_bytes).decode("utf-8")
     task = (worker.parse_csv_task.s(content_str) | worker.create_providers_task.s())()
-    return {"task_id": str(task), "status": "processing"}
-
+    return JSONResponse(
+        status_code=202, content={"task_id": str(task), "status": "processing"}
+    )
 
 @r.get(
     "/upload/status/{task_id}",

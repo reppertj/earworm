@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from typing import Optional, List
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from .upload import UploadStatusBase
-from .track import Track
 from .embedding_model import EmbeddingModel
+
 
 
 # Shared properties
@@ -27,14 +29,12 @@ class EmbeddingUpdate(EmbeddingBase):
 
 class EmbeddingInDBBase(EmbeddingBase):
     id: int
-    track: Track
     model: EmbeddingModel
 
 
 # Additional properties to return via API
 class Embedding(EmbeddingBase):
     id: int
-    track: Track
     model: EmbeddingModel
 
 

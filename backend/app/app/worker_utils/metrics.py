@@ -15,5 +15,5 @@ def spherical_mean(
         if isinstance(embeddings[0], list):
             embeddings = np.array(embeddings, dtype=np.float32)
         else:
-            embeddings = np.vstack(embeddings)
-    return _mean.fit(embeddings, weights=weights).estimate_
+            embeddings = np.vstack(embeddings).astype(np.float32)
+    return _mean.fit(embeddings, weights=weights).estimate_.astype(np.float32)

@@ -7,7 +7,7 @@ from app.schemas.provider import ProviderCreate
 from app.tests.utils.utils import random_lower_string, random_url
 
 
-def create_random_provider(db: Session) -> models.License:
+def create_random_provider(db: Session) -> models.Provider:
     name = random_lower_string()
     url = random_url()
     provider_in = ProviderCreate(name=name, url=url)

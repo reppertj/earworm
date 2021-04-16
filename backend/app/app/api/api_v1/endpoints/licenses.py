@@ -12,10 +12,15 @@ router = r = APIRouter()
 
 
 @r.get(
-    "/", response_model=t.List[schemas.License], response_model_exclude_unset=True,
+    "/",
+    response_model=t.List[schemas.License],
+    response_model_exclude_unset=True,
 )
 def licenses_list(
-    response: Response, skip: int = 0, limit: int = 100, db=Depends(deps.get_db),
+    response: Response,
+    skip: int = 0,
+    limit: int = 100,
+    db=Depends(deps.get_db),
 ):
     """
     Get all licenses (paginated)
@@ -27,10 +32,13 @@ def licenses_list(
 
 
 @r.get(
-    "/{license_id}", response_model=schemas.License, response_model_exclude_none=True,
+    "/{license_id}",
+    response_model=schemas.License,
+    response_model_exclude_none=True,
 )
 def license_details(
-    license_id: int, db=Depends(deps.get_db),
+    license_id: int,
+    db=Depends(deps.get_db),
 ):
     """
     Get name and link to any license
@@ -51,7 +59,9 @@ async def upload_licenses(csv_file: UploadFile = File(...)):
     content_bytes = await csv_file.read()
     content_str = t.cast(bytes, content_bytes).decode("utf-8")
     task = (worker.parse_csv_task.s(content_str) | worker.create_licenses_task.s())()
-    return {"task_id": str(task), "status": "processing"}
+    return JSONResponse(
+        status_code=202, content={"task_id": str(task), "status": "processing"}
+    )
 
 
 @r.get(
@@ -76,7 +86,6 @@ def upload_licenses_status(task_id: str):
             status_code=202, content={"task_id": task_id, "status": "processing"}
         )
     result = task.get()
-    print(result)
     return {
         "task_id": task_id,
         "status": "success",

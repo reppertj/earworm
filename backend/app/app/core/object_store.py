@@ -55,6 +55,9 @@ def upload_to_s3(key: str, file_path: str, check_first=False) -> None:
     if not check_first or not object_on_s3(key=key):
         s3.upload_file(Filename=file_path, Bucket=bucket, Key=key)
 
+@if_s3_setup
+def remove_from_s3(key: str):
+    s3.delete_object(Bucket=bucket, Key=key)
 
 @if_s3_setup
 def all_keys_on_s3(
