@@ -1,11 +1,16 @@
-import React from 'react';
+/**
+ *
+ * AudioButton
+ *
+ */
+import React, { memo } from 'react';
 
 interface Props {
   audioElementRef: React.MutableRefObject<HTMLAudioElement | null>;
   url: string | undefined;
 }
 
-export default function AudioButton(props: Props) {
+export const AudioButton = memo((props: Props) => {
   return (
     <audio
       ref={props.audioElementRef}
@@ -13,4 +18,4 @@ export default function AudioButton(props: Props) {
       crossOrigin={'anonymous'}
     ></audio>
   );
-}
+});
