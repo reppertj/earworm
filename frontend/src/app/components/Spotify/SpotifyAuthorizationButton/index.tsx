@@ -1,15 +1,19 @@
+/**
+ *
+ * SpotifyAuthorizationButton
+ *
+ */
 import React, { useEffect } from 'react';
-
 import Button from '@material-ui/core/Button';
 import useTheme from '@material-ui/core/styles/useTheme';
 
-import SpotifyIcon from './SpotifyIcon';
+import SpotifyIcon from '../../SpotifyIcon';
 
 import {
   getHashParams,
   removeHashParamsFromUrl,
   getAuthorizeHref,
-} from '../utils/spotify';
+} from '../../../utils/spotify';
 import ls from 'local-storage';
 
 const authEndpoint = 'https://accounts.spotify.com/authorize';
@@ -28,8 +32,7 @@ interface Props {
     }>
   >;
 }
-
-export default function SpotifyAuthorizationButton(props: Props) {
+export function SpotifyAuthorizationButton(props: Props) {
   const theme = useTheme();
 
   (ls as any).backend(localStorage);
@@ -40,7 +43,8 @@ export default function SpotifyAuthorizationButton(props: Props) {
     const EXPIRY_MULT = (1000 * 9) / 10;
     const expiresIn = Number(params.expires_in) * EXPIRY_MULT + Date.now();
     try {
-      if (accessToken || ls('accessToken')) {
+      if (accessToken || ls('SpotifyAccessToken')) {
+        // throw new Error("Oh no!")
         props.setLoggedIn(true);
         ls('SpotifyAccessToken', accessToken);
         ls('SpotifyExpiry', expiresIn);
@@ -57,14 +61,14 @@ export default function SpotifyAuthorizationButton(props: Props) {
           Number((ls('SpotifyExpiry') as unknown) as string),
         );
       }
-    } catch {
+    } catch (e) {
       props.setHasError({
         error: true,
         message: "Couldn't connect to your Spotify account. Sorry about that.",
       });
       props.setLoggedIn(false);
       props.setAccessToken('');
-      ls('accessToken', '');
+      ls('SpotifyAccessToken', '');
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps

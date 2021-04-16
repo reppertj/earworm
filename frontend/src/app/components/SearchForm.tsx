@@ -11,10 +11,10 @@ import CloudUploadIcon from '@material-ui/icons/CloudUpload';
 import { useDropzone } from 'react-dropzone';
 import getChannelDataAndSampleRate, { FullAudioData } from '../utils/audio';
 import { UploadSurferPair } from './UploadSurfer';
-import ErrorSnackBar from './ErrorSnackBar';
+import { ErrorSnackBar } from './ErrorSnackBar';
 import SpotifySearchForm from './SpotifySearchForm';
 import SearchProgress from './SearchProgress';
-import SpotifyAuthorizationButton from './SpotifyAuthorizationButton';
+import { SpotifyAuthorizationButton } from './Spotify/SpotifyAuthorizationButton';
 import { SpotifyChooser } from './SpotifyResultChooser';
 import Worker from '../worker';
 

@@ -10,7 +10,7 @@ import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Switch, Route, BrowserRouter } from 'react-router-dom';
 
-import { unstable_createMuiStrictModeTheme as createMuiTheme } from '@material-ui/core';
+import { createMuiTheme } from '@material-ui/core';
 import { ThemeProvider, StylesProvider } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import '@fontsource/roboto/300.css';

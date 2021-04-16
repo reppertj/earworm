@@ -7,7 +7,7 @@ interface Props {
   url: string | undefined;
 }
 
-export default function AudioButton(props: Props) {
+export const AudioButton = (props: Props) => {
   const volume = useSelector(selectVolume).value;
   if (props.audioElementRef.current) {
     props.audioElementRef.current.volume = volume;
@@ -19,4 +19,4 @@ export default function AudioButton(props: Props) {
       crossOrigin={'anonymous'}
     ></audio>
   );
-}
+};
