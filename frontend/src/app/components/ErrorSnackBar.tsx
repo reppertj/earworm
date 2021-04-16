@@ -19,18 +19,23 @@ interface Props {
   >;
 }
 
-export default function ErrorSnackBar(props: Props) {
+export const ErrorSnackBar = React.forwardRef((props: Props, ref) => {
   const resetErrorState = () => {
     props.setHasError({ error: false, message: '' });
   };
 
   return (
-    <>
+    <div>
       {props.hasError.error && (
-        <Snackbar open={true} autoHideDuration={8000} onClose={resetErrorState}>
+        <Snackbar
+          ref={ref}
+          open={true}
+          autoHideDuration={8000}
+          onClose={resetErrorState}
+        >
           <Alert severity="error">{props.hasError.message}</Alert>
         </Snackbar>
       )}
-    </>
+    </div>
   );
-}
+});
