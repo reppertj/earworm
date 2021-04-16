@@ -17,6 +17,8 @@ import SearchProgress from './SearchProgress';
 import { SpotifyAuthorizationButton } from './Spotify/SpotifyAuthorizationButton';
 import { SpotifyChooser } from './SpotifyResultChooser';
 import Worker from '../worker';
+import { selectSpotifyAuth } from './Spotify/slice/selectors';
+import { useSelector } from 'react-redux';
 
 var inferenceWorker = new Worker();
 
@@ -54,14 +56,16 @@ async function getMaybeMultipleChannelData(sources: Sources): Promise<Sources> {
 }
 
 function MusicSearchForm(props) {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [tokenExpiryDate, setTokenExpiryDate] = useState<number | null>(null);
+  // const [loggedIn, setLoggedIn] = useState(false);
+  // const [accessToken, setAccessToken] = useState<string | null>(null);
+  // const [tokenExpiryDate, setTokenExpiryDate] = useState<number | null>(null);
   const [hasError, setHasError] = useState({ error: false, message: '' });
   const [spotifyResults, setSpotifyResults] = useState<any>(null);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [sources, setSources] = useState<Sources>([null, null]);
   const [filesLeft, setFilesLeft] = useState(2);
+
+  const { loggedIn, tokenExpiryDate } = useSelector(selectSpotifyAuth);
 
   const addSources = useCallback(
     (sourceData: Array<string | File>) => {
@@ -98,27 +102,21 @@ function MusicSearchForm(props) {
   );
 
   const SpotifyElement = useMemo(() => {
-    if (!loggedIn || (tokenExpiryDate && tokenExpiryDate < Date.now())) {
-      return (
-        <SpotifyAuthorizationButton
-          loggedIn={loggedIn}
-          setLoggedIn={setLoggedIn}
-          setAccessToken={setAccessToken}
-          setTokenExpiryDate={setTokenExpiryDate}
-          setHasError={setHasError}
-        />
-      );
+    if (
+      !loggedIn ||
+      hasError.error ||
+      (tokenExpiryDate && tokenExpiryDate < Date.now())
+    ) {
+      return <SpotifyAuthorizationButton setHasError={setHasError} />;
     } else {
       return (
         <SpotifySearchForm
-          accessToken={accessToken}
-          setLoggedIn={setLoggedIn}
           setHasError={setHasError}
           setSpotifyResults={setSpotifyResults}
         />
       );
     }
-  }, [loggedIn, accessToken, tokenExpiryDate]);
+  }, [loggedIn, tokenExpiryDate, hasError]);
 
   useEffect(() => {
     if (!chooserOpen && spotifyResults) {

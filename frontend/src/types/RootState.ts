@@ -1,4 +1,5 @@
 import { VolumeState } from 'app/components/Playback/volumeSlice/types';
+import { SpotifyAuthState } from 'app/components/Spotify/slice/types';
 // [IMPORT NEW CONTAINERSTATE ABOVE] < Needed for generating containers seamlessly
 
 /* 
@@ -7,5 +8,6 @@ import { VolumeState } from 'app/components/Playback/volumeSlice/types';
 */
 export interface RootState {
   volume?: VolumeState;
+  spotifyAuth?: SpotifyAuthState;
   // [INSERT NEW REDUCER KEY ABOVE] < Needed for generating containers seamlessly
 }

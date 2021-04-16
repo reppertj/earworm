@@ -4,6 +4,8 @@
  *
  */
 import React, { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { useSpotifyAuthSlice } from '../slice';
 import Button from '@material-ui/core/Button';
 import useTheme from '@material-ui/core/styles/useTheme';
 
@@ -21,10 +23,6 @@ const authEndpoint = 'https://accounts.spotify.com/authorize';
 const scopes = [];
 
 interface Props {
-  loggedIn: boolean;
-  setLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
-  setAccessToken: React.Dispatch<React.SetStateAction<string | null>>;
-  setTokenExpiryDate: React.Dispatch<React.SetStateAction<number | null>>;
   setHasError: React.Dispatch<
     React.SetStateAction<{
       error: boolean;
@@ -34,41 +32,26 @@ interface Props {
 }
 export function SpotifyAuthorizationButton(props: Props) {
   const theme = useTheme();
-
-  (ls as any).backend(localStorage);
+  const dispatch = useDispatch();
+  const { actions } = useSpotifyAuthSlice();
+  // const { }
   console.log(ls);
   useEffect(() => {
     const params = getHashParams();
-    const accessToken = params.access_token;
+    const token = params.access_token;
     const EXPIRY_MULT = (1000 * 9) / 10;
-    const expiresIn = Number(params.expires_in) * EXPIRY_MULT + Date.now();
+    const expiry = Number(params.expires_in) * EXPIRY_MULT + Date.now();
     try {
-      if (accessToken || ls('SpotifyAccessToken')) {
-        // throw new Error("Oh no!")
-        props.setLoggedIn(true);
-        ls('SpotifyAccessToken', accessToken);
-        ls('SpotifyExpiry', expiresIn);
-        props.setAccessToken(accessToken);
-        props.setTokenExpiryDate(expiresIn);
+      if (token) {
+        dispatch(actions.logIn({ token, expiry }));
         removeHashParamsFromUrl();
-      } else if (
-        ((ls('SpotifyAccessToken') as unknown) as string) &&
-        Date.now() < Number(ls('SpotifyExpiry') as unknown) &&
-        props.loggedIn
-      ) {
-        props.setAccessToken((ls('SpotifyAccessToken') as unknown) as string);
-        props.setTokenExpiryDate(
-          Number((ls('SpotifyExpiry') as unknown) as string),
-        );
       }
     } catch (e) {
       props.setHasError({
         error: true,
         message: "Couldn't connect to your Spotify account. Sorry about that.",
       });
-      props.setLoggedIn(false);
-      props.setAccessToken('');
-      ls('SpotifyAccessToken', '');
+      dispatch(actions.logOut());
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps

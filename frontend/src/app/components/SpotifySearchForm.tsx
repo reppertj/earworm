@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { makeStyles, Theme } from '@material-ui/core/styles';
 import Grid from '@material-ui/core/Grid';
 import TextField from '@material-ui/core/TextField';
 import SpotifyIcon from './SpotifyIcon';
+import { useSpotifyAuthSlice } from './Spotify/slice';
+import { selectSpotifyAuth } from './Spotify/slice/selectors';
 import IconButton from '@material-ui/core/IconButton';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import GREY from '@material-ui/core/colors/grey';
@@ -25,9 +28,7 @@ const useStyles = makeStyles((theme: Theme) => ({
 }));
 
 interface Props {
-  accessToken: null | string;
   setSpotifyResults: React.Dispatch<any>;
-  setLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   setHasError: React.Dispatch<
     React.SetStateAction<{
       error: boolean;
@@ -40,7 +41,9 @@ export default function SearchButton(props: Props) {
   const [searchInput, setSearchInput] = useState('');
   const [searching, setSearching] = useState(false);
   const [progress, setProgress] = useState(false);
-  const accessToken = props.accessToken;
+  const { accessToken } = useSelector(selectSpotifyAuth);
+  const dispatch = useDispatch();
+  const { actions } = useSpotifyAuthSlice();
   const classes = useStyles();
   const controller = new AbortController();
 
@@ -76,7 +79,7 @@ export default function SearchButton(props: Props) {
         });
       } catch (error) {
         console.log('error', error);
-        props.setLoggedIn(false); // Something went wrong; try logging out
+        dispatch(actions.logOut()); // Something went wrong; try logging out
         props.setHasError({
           error: true,
           message:

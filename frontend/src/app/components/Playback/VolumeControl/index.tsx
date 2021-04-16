@@ -22,9 +22,9 @@ const useStyles = makeStyles({
 export const VolumeControl = memo(() => {
   const classes = useStyles();
   const dispatch = useDispatch();
-  const volume = useSelector(selectVolume);
+  const { value: volume } = useSelector(selectVolume);
   const { actions } = useVolumeSlice();
-  const [value, setValue] = useState(volume.value);
+  const [value, setValue] = useState(volume);
   const handleChange = (e: any, newValue: number | number[]) => {
     dispatch(actions.changeVolume(newValue as number));
     setValue(newValue as number);
@@ -52,15 +52,5 @@ export const VolumeControl = memo(() => {
         </Grid>
       </Grid>
     </div>
-    // <div className={classes.root}>
-    //   <Slider
-    //     onChange={handleChange}
-    //     color="secondary"
-    //     name="volume"
-    //     step={0.01}
-    //     min={0}
-    //     max={1}
-    //   ></Slider>
-    // </div>
   );
 });

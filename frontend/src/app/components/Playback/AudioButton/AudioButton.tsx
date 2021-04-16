@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const AudioButton = (props: Props) => {
-  const volume = useSelector(selectVolume).value;
+  const { value: volume } = useSelector(selectVolume);
   if (props.audioElementRef.current) {
     props.audioElementRef.current.volume = volume;
   }
