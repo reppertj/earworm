@@ -27,10 +27,10 @@ import { GlobalStyle } from 'styles/global-styles';
 const theme = createMuiTheme({
   palette: {
     primary: {
-      main: '#78909c',
+      main: '#8daa91',
     },
     secondary: {
-      main: '#ffca28',
+      main: '#424b54',
     },
   },
 });

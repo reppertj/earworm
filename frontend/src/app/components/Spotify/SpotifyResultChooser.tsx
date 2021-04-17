@@ -24,6 +24,9 @@ import Tooltip from '@material-ui/core/Tooltip';
 import makeStyles from '@material-ui/core/styles/makeStyles';
 import Radio from '@material-ui/core/Radio';
 import { AudioButton } from '../Playback/AudioButton/AudioButton';
+import { useDispatch } from 'react-redux';
+import { useAudioSourcesSlice } from '../SearchInputs/slice';
+import { nanoid } from '@reduxjs/toolkit';
 
 const useStyles = makeStyles(theme => ({
   listItem: { cursor: 'pointer' },
@@ -163,13 +166,14 @@ interface SpotifyChooserProps {
   setSpotifyResults: React.Dispatch<any>;
   open: true;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  addSources: (sourceData: Array<string | File>) => void;
 }
 
 export function SpotifyChooser(props: SpotifyChooserProps) {
   const [selectedValue, setSelectedValue] = useState<number>(0);
   const [currentlyPlayingRef, setCurrentlyPlayingRef] = useState<unknown>(null);
-  const { open, setOpen, addSources } = props;
+  const { open, setOpen } = props;
+  const dispatch = useDispatch();
+  const { actions } = useAudioSourcesSlice();
 
   const items: Array<any> = props.spotifyResults.tracks.items;
   const processed = removeUnpreviewableItems(items).map(getInfo).slice(0, 20);
@@ -189,7 +193,15 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
     const previewUrl = processed.filter(item => item.key === selectedValue)[0]
       .previewUrl;
     if (previewUrl) {
-      addSources([previewUrl]);
+      dispatch(
+        actions.sourcesAddedIfRoom([
+          {
+            id: nanoid(),
+            originalData: previewUrl,
+            ready: false,
+          },
+        ]),
+      );
     }
     setOpen(false);
     props.setSpotifyResults(null);

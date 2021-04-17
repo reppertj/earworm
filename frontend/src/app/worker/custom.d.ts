@@ -1,15 +1,15 @@
-interface RegionStart {
-  id: number;
-  seconds: number;
-  preference: number;
-}
+// interface RegionStart {
+//   id: number;
+//   seconds: number;
+//   preference: number;
+// }
 
-interface Source {
-  id: number;
-  regionStarts: RegionStart[];
-  source?: string | File;
-  channelData?: FullAudioData;
-}
+// interface Source {
+//   id: number;
+//   regionStarts: RegionStart[];
+//   source?: string | File;
+//   channelData?: FullAudioData;
+// }
 
 declare module 'comlink-loader!*' {
   class WebpackWorker extends Worker {

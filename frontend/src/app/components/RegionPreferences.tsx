@@ -6,26 +6,47 @@ import RadioGroup from '@material-ui/core/RadioGroup';
 import Radio from '@material-ui/core/Radio';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 
-import { regionColorsMui } from './UploadSurfer';
-
-const useStyles = makeStyles(theme => ({
-  radio: { marginLeft: '0.2em', paddingTop: '0.05em', paddingBottom: '0.05em' },
-  root: { paddingTop: '0.05em', paddingBottom: '0.05em' },
-  formLabel: { paddingLeft: '0.2em', paddingTop: '0.2em' },
-  label: { fontSize: 'small' },
-}));
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  selectRegionByID,
+  selectRegionIdToSolidColorMap,
+  selectRegionIdToShowIdMap,
+} from './SearchInputs/Regions/slice/selectors';
+import { useRegionsSlice } from './SearchInputs/Regions/slice';
 
 interface RegionPreferencesProps {
-  regionID: number;
-  regionPreference: number;
-  updateRegionPreference: (regionID: any, newPreference: any) => void;
+  regionId: string;
 }
 
 export default function RegionPreferences(props: RegionPreferencesProps) {
-  const { regionID, regionPreference, updateRegionPreference } = props;
-  const [preference, setPreference] = useState(regionPreference);
+  const dispatch = useDispatch();
+  const { actions } = useRegionsSlice();
+  const { regionId } = props;
+  const region = useSelector(state => selectRegionByID(state, regionId));
+  const [preference, setPreference] = useState(region?.preference);
 
-  const color = regionColorsMui[regionID - 1];
+  const colorMap = useSelector(selectRegionIdToSolidColorMap);
+  const showIdMap = useSelector(selectRegionIdToShowIdMap);
+
+  const showId = showIdMap[regionId];
+  const color = colorMap[regionId];
+
+  const useStyles = makeStyles(theme => ({
+    radio: {
+      marginLeft: '0.2em',
+      paddingTop: '0.05em',
+      paddingBottom: '0.05em',
+      '&$checked': {
+        color: color,
+      },
+    },
+    checked: {
+      color: color,
+    },
+    root: { paddingTop: '0.05em', paddingBottom: '0.05em' },
+    formLabel: { paddingLeft: '0.2em', paddingTop: '0.2em' },
+    label: { fontSize: 'small' },
+  }));
 
   const classes = useStyles();
 
@@ -41,8 +62,13 @@ export default function RegionPreferences(props: RegionPreferencesProps) {
   );
 
   const handleChange = ev => {
-    const newPreference = preferencesMap[ev.target.value];
-    updateRegionPreference(regionID, newPreference);
+    const newPreference: number = preferencesMap[ev.target.value];
+    dispatch(
+      actions.regionUpdated({
+        id: regionId,
+        changes: { preference: newPreference },
+      }),
+    );
     setPreference(newPreference);
   };
 
@@ -50,25 +76,27 @@ export default function RegionPreferences(props: RegionPreferencesProps) {
     <>
       <FormControl component="fieldset">
         <FormLabel className={classes.formLabel} component="legend">
-          Zone {regionID} Focus:
+          Zone {showId} Focus:
         </FormLabel>
-        <RadioGroup value={value} onChange={handleChange}>
-          {Object.keys(preferencesMap).map(desc => (
-            <FormControlLabel
-              classes={{ root: classes.root, label: classes.label }}
-              key={desc}
-              value={desc}
-              control={
-                <Radio
-                  color={color}
-                  classes={{ root: classes.radio }}
-                  size="small"
-                />
-              }
-              label={desc}
-            />
-          ))}
-        </RadioGroup>
+        {value && (
+          <RadioGroup value={value} onChange={handleChange}>
+            {Object.keys(preferencesMap).map(desc => (
+              <FormControlLabel
+                classes={{ root: classes.root, label: classes.label }}
+                key={desc}
+                value={desc}
+                control={
+                  <Radio
+                    color="primary"
+                    classes={{ root: classes.radio, checked: classes.checked }}
+                    size="small"
+                  />
+                }
+                label={desc}
+              />
+            ))}
+          </RadioGroup>
+        )}
       </FormControl>
     </>
   );

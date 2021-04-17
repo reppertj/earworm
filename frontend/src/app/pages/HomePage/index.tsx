@@ -4,7 +4,7 @@ import makeStyles from '@material-ui/core/styles/makeStyles';
 import Typography from '@material-ui/core/Typography';
 
 import AppBar from '../../components/AppBar';
-import MusicSearchForm from '../../components/SearchForm';
+import MusicSearchForm from '../../components/SearchInputs/SearchForm';
 import Copyright from '../../components/Copyright';
 
 const useStyles = makeStyles(theme => ({

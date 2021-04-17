@@ -1,12 +1,4 @@
-type SampleRate = number;
-type ChanneledAudioData = Float32Array[];
-export type FullAudioData = [ChanneledAudioData, SampleRate];
-
-declare global {
-  interface Window {
-    webkitAudioContext: typeof AudioContext;
-  }
-}
+import { AudioContext, OfflineAudioContext } from 'standardized-audio-context';
 
 function makeRequest(method: string, url: string): Promise<ArrayBuffer> {
   return new Promise(function (resolve, reject) {
@@ -39,7 +31,7 @@ function makeRequest(method: string, url: string): Promise<ArrayBuffer> {
  * @param source    Blob or url
  */
 async function makeAudioBuffer(source: File | string): Promise<AudioBuffer> {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioCtx = new AudioContext();
   let audioData: Promise<ArrayBuffer>;
   if (typeof source === 'string') {
     audioData = makeRequest('GET', source);
@@ -59,14 +51,14 @@ async function makeAudioBuffer(source: File | string): Promise<AudioBuffer> {
  */
 export default async function getChannelDataAndSampleRate(
   source: File | string,
-): Promise<FullAudioData> {
+): Promise<{ channelData: Readonly<Float32Array[]>; sampleRate: number }> {
   const audioBuffer = await makeAudioBuffer(source);
   const offlineCtx = new OfflineAudioContext(
     audioBuffer.numberOfChannels,
     audioBuffer.duration * audioBuffer.sampleRate,
     audioBuffer.sampleRate,
   );
-  if (audioBuffer.duration < 3) {
+  if (audioBuffer.duration < 4) {
     throw new Error('AudioTooShort');
   }
   const offlineSource = offlineCtx.createBufferSource();
@@ -79,5 +71,7 @@ export default async function getChannelDataAndSampleRate(
       audioArray[channel] = offlineBuffer.getChannelData(channel);
     }
   });
-  return [audioArray, audioBuffer.sampleRate];
+  const channelData = Object.freeze(audioArray);
+  const sampleRate = audioBuffer.sampleRate;
+  return { channelData, sampleRate };
 }

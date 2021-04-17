@@ -2,7 +2,13 @@
  * Create the store with dynamic reducers
  */
 
-import { configureStore, getDefaultMiddleware } from '@reduxjs/toolkit';
+import {
+  configureStore,
+  getDefaultMiddleware,
+  Action,
+  Update,
+} from '@reduxjs/toolkit';
+import { Source } from '../app/components/SearchInputs/slice/types';
 import { createInjectorsEnhancer } from 'redux-injectors';
 import createSagaMiddleware from 'redux-saga';
 
@@ -23,10 +29,20 @@ export function configureAppStore() {
     }),
   ];
 
+  interface ActionWithPayload<T> extends Action {
+    payload: T;
+  }
+
   const store = configureStore({
     reducer: createReducer(),
-    middleware: [...getDefaultMiddleware(), ...middlewares],
-    devTools: process.env.NODE_ENV !== 'production',
+    middleware: [
+      ...getDefaultMiddleware({
+        immutableCheck: false,
+        serializableCheck: false,
+      }),
+      ...middlewares,
+    ],
+    devTools: false || process.env.NODE_ENV !== 'production',
     enhancers,
   });
 

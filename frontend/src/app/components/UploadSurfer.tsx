@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState, useMemo } from 'react';
 
 import Box from '@material-ui/core/Box';
 import Grid from '@material-ui/core/Grid';
@@ -12,13 +12,28 @@ import createStyles from '@material-ui/core/styles/createStyles';
 import useTheme from '@material-ui/core/styles/useTheme';
 import DeleteIcon from '@material-ui/icons/DeleteOutline';
 
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { selectVolume } from './Playback/volumeSlice/selectors';
 
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugin/wavesurfer.regions';
 import RegionPreferences from './RegionPreferences';
-import { Source } from './SearchForm';
+
+import {
+  selectRegionsAvailable,
+  selectAllRegions,
+  selectRegionIdToAlphaColorMap,
+  selectRegionIdToSolidColorMap,
+  selectRegionIdToShowIdMap,
+} from './SearchInputs/Regions/slice/selectors';
+import { useRegionsSlice } from './SearchInputs/Regions/slice';
+import { useErrorSlice } from './Error/slice';
+import { nanoid } from '@reduxjs/toolkit';
+import { useAudioSourcesSlice } from './SearchInputs/slice';
+import {
+  selectAllSources,
+  selectSourceByID,
+} from './SearchInputs/slice/selectors';
 
 const useStyles = makeStyles(theme =>
   createStyles({
@@ -28,126 +43,36 @@ const useStyles = makeStyles(theme =>
   }),
 );
 
-const regionColors = [
-  'rgba(120, 144, 156, 0.5)', // Primary w/ alpha
-  'rgba(255, 202, 40, 0.5)', // Secondary w/ alpha
-];
+// interface UploadSurferPairProps {}
 
-export const regionColorsMui: Array<'primary' | 'secondary'> = [
-  'primary',
-  'secondary',
-];
-
-interface RegionStartCallbacks {
-  addRegionStart: (sourceID: any, startTime: any) => number | undefined;
-  removeRegionStart: (sourceID: any, regionID: any) => void;
-  updateRegionStart: (sourceID: any, regionID: any, startTime: any) => void;
-  updateRegionPreference: (regionID: any, newPreference: any) => void;
-}
-
-interface UploadSurferPairProps {
-  removeSource: (sourcePosition: number) => void;
-  sources: Source[];
-  numAvailableRegions: number;
-  regionStartCallbacks: RegionStartCallbacks;
-}
-
-function UploadSurferPair(props: UploadSurferPairProps) {
-  const [playing, setPlaying] = useState([false, false]);
-  const { sources, numAvailableRegions, removeSource } = props;
-  const {
-    addRegionStart,
-    removeRegionStart,
-    updateRegionStart,
-    updateRegionPreference,
-  } = props.regionStartCallbacks;
-
-  const onPlayPause = (isPlaying: boolean, index: number) => {
-    const other = index === 0 ? 1 : 0;
-    const nowPlaying = playing.slice();
-    nowPlaying[index] = isPlaying;
-    if (isPlaying) {
-      nowPlaying[other] = !isPlaying;
-    }
-    setPlaying(nowPlaying);
-  };
-
-  function makeRegionOptions(id: number, start: number) {
-    console.log();
-    return {
-      id: id.toString(),
-      start: start,
-      end: start + 3,
-      loop: true,
-      drag: true,
-      resize: false,
-      color: regionColors[id - 1],
-    };
-  }
-
-  const handleAddRegion = (sourceID: number, waveSurfer: WaveSurfer) => {
-    if (numAvailableRegions) {
-      const startPosition = Math.min(
-        waveSurfer.getCurrentTime(),
-        waveSurfer.getDuration() - 3,
-      );
-      const regionID = addRegionStart(sourceID, startPosition);
-      if (regionID !== undefined) {
-        const region = waveSurfer.addRegion(
-          makeRegionOptions(regionID, startPosition),
-        );
-        region.regionID = regionID;
-        region.on('update-end', function () {
-          updateRegionStart(sourceID, regionID, region.start);
-        });
-      }
-    }
-  };
-
-  const regionStarts = sources.flatMap(source => source?.regionStarts || []);
+function UploadSurferPair() {
+  const dispatch = useDispatch();
+  const sources = useSelector(selectAllSources);
+  const regions = useSelector(selectAllRegions);
 
   return (
     <>
       <Grid container direction="column" spacing={2}>
         <Grid container item direction="column" spacing={2}>
-          {sources.map((elem, idx) => {
+          {sources.map(source => {
             return (
-              <div key={idx}>
-                {elem && (
-                  <Box padding={2}>
-                    <Grid item>
-                      <UploadSurfer
-                        surferID={idx}
-                        source={elem}
-                        removeSource={() => removeSource(idx)}
-                        handleAddRegion={handleAddRegion}
-                        handleRemoveRegion={regionID =>
-                          removeRegionStart(elem.id, regionID)
-                        }
-                        numAvailableRegions={numAvailableRegions}
-                        playing={playing[idx]}
-                        onPlayPause={(isPlaying: boolean) =>
-                          onPlayPause(isPlaying, idx)
-                        }
-                      />
-                    </Grid>
-                  </Box>
-                )}
+              <div key={source.id}>
+                <Box padding={2}>
+                  <Grid item>
+                    <UploadSurfer sourceId={source.id} />
+                  </Grid>
+                </Box>
               </div>
             );
           })}
         </Grid>
         <Grid container justify="space-around" item direction="row" spacing={1}>
-          {regionStarts.map(regionStart => {
+          {regions.map(region => {
             return (
-              <div key={regionStart.id}>
+              <div key={region.id}>
                 <Grid item>
                   <Paper>
-                    <RegionPreferences
-                      regionID={regionStart.id}
-                      regionPreference={regionStart.preference}
-                      updateRegionPreference={updateRegionPreference}
-                    />
+                    <RegionPreferences regionId={region.id} />
                   </Paper>
                 </Grid>
               </div>
@@ -160,34 +85,11 @@ function UploadSurferPair(props: UploadSurferPairProps) {
 }
 
 interface UploadSurferProps {
-  surferID: number;
-  source: Source;
-  onPlayPause: (isPlaying: boolean, index: number) => void;
-  playing: boolean;
-  removeSource: () => void;
-  handleAddRegion: (sourceID: number, waveSurfer: WaveSurfer) => void;
-  handleRemoveRegion: (regionID: number) => void;
-  numAvailableRegions: number;
+  sourceId: string;
 }
 
 const UploadSurfer = memo((props: UploadSurferProps) => {
-  const waveformRef = useRef<HTMLDivElement | null>(null);
-  const wavesurfer = useRef<WaveSurfer | null>(null);
-  const volume = useSelector(selectVolume).value;
-  const [loaded, setLoaded] = useState(false);
-
-  const {
-    source,
-    surferID,
-    removeSource,
-    handleAddRegion,
-    handleRemoveRegion,
-    numAvailableRegions,
-    onPlayPause,
-    playing,
-  } = props;
-
-  const sourcePath = source?.source === undefined ? null : source.source;
+  const { sourceId } = props;
 
   const classes = useStyles();
   const theme = useTheme();
@@ -195,7 +97,7 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
   const makeSurferOptions = (ref: HTMLDivElement) => ({
     container: ref,
     waveColor: theme.palette.primary.light,
-    progressColor: theme.palette.secondary.main,
+    progressColor: theme.palette.secondary.light,
     cursorColor: theme.palette.secondary.dark,
     barWidth: 2,
     barHeight: 1,
@@ -208,18 +110,36 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
     plugins: [RegionsPlugin.create()],
   });
 
+  const waveformRef = useRef<HTMLDivElement | null>(null);
+  const wavesurfer = useRef<WaveSurfer | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState<boolean>(false);
+
+  const volume = useSelector(selectVolume).value;
+  const source = useSelector(state => selectSourceByID(state, sourceId));
+  const regions = useSelector(selectAllRegions).filter(
+    region => region.sourceId === sourceId,
+  );
+  const numRegionsAvailable = useSelector(selectRegionsAvailable);
+
+  const dispatch = useDispatch();
+  const { actions: regionActions } = useRegionsSlice();
+  const { actions: sourceActions } = useAudioSourcesSlice();
+
   // Create new instance on mount and when source changes
   useEffect(() => {
     if (waveformRef.current) {
-      onPlayPause(false, surferID);
+      // onPlayPause(false, sourceId);
       const options = makeSurferOptions(waveformRef.current);
       wavesurfer.current = WaveSurfer.create(options);
-      if (sourcePath !== null) {
-        if (typeof sourcePath === 'string') {
-          wavesurfer.current.load(sourcePath);
+      const audioData = source?.originalData;
+      if (audioData) {
+        if (typeof audioData === 'string') {
+          wavesurfer.current.load(audioData);
         } else {
-          wavesurfer.current.loadBlob(sourcePath);
+          wavesurfer.current.loadBlob(audioData);
         }
+        setLoaded(true);
       }
     }
     return () => {
@@ -229,13 +149,13 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourcePath, surferID]);
+  }, [source, sourceId]);
 
-  useEffect(() => {
-    playing ? wavesurfer.current?.play() : wavesurfer.current?.pause();
-  }, [playing]);
+  // useEffect(() => {
+  //   playing ? wavesurfer.current?.play() : wavesurfer.current?.pause();
+  // }, [playing]);
 
-  // Set volume in case of new instance with volume already set
+  // Initial Volume
   wavesurfer.current?.on('ready', function () {
     if (wavesurfer.current) {
       setLoaded(true);
@@ -243,36 +163,91 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
     }
   });
 
-  function addRegion() {
-    if (wavesurfer.current && loaded) {
-      if (numAvailableRegions) {
-        handleAddRegion(props.source.id, wavesurfer.current);
-      }
-    }
-    console.log(wavesurfer.current);
+  // Later Volume
+  useEffect(() => {
+    wavesurfer.current?.setVolume(volume);
+  }, [volume]);
+
+  // Update region attributes inside wavesurfer
+
+  const alphaColorMap = useSelector(selectRegionIdToAlphaColorMap);
+  const solidColorMap = useSelector(selectRegionIdToSolidColorMap);
+  const showIdMap = useSelector(selectRegionIdToShowIdMap);
+
+  if (wavesurfer.current && loaded) {
+    const surferRegions = Object.values(wavesurfer.current.regions.list);
+    surferRegions.forEach((surferRegion: any) => {
+      surferRegion.update({
+        color: alphaColorMap[surferRegion.attributes.regionId],
+        attributes: {
+          regionId: surferRegion.attributes.regionId,
+          label: showIdMap[surferRegion.attributes.regionId],
+        },
+      });
+    });
   }
 
-  function removeRegion(regionID: number) {
+  function addRegion() {
+    if (wavesurfer.current && loaded && sourceId) {
+      const start = Math.min(
+        wavesurfer.current.getCurrentTime(),
+        wavesurfer.current.getDuration() - 3,
+      );
+      const regionId = nanoid();
+      dispatch(
+        regionActions.regionAddedIfRoom({
+          id: regionId,
+          sourceId: sourceId,
+          seconds: start,
+          preference: 4,
+        }),
+      );
+      const surferRegion = wavesurfer.current.addRegion({
+        start,
+        end: start + 3,
+        loop: true,
+        drag: true,
+        resize: false,
+        color: alphaColorMap[regionId],
+        attributes: { regionId, label: '' },
+      });
+      surferRegion.regionId = regionId;
+      surferRegion.on('update-end', function () {
+        dispatch(
+          regionActions.regionUpdated({
+            id: regionId,
+            changes: { seconds: surferRegion.start as number },
+          }),
+        );
+      });
+    }
+  }
+
+  function removeRegion(regionId: string) {
     if (wavesurfer.current && loaded) {
       const waveSurferRegionObject: any = Object.values(
         wavesurfer.current.regions.list,
-      ).find((elem: any) => elem.regionID === regionID);
-      waveSurferRegionObject.remove();
-      handleRemoveRegion(regionID);
+      ).find((elem: any) => elem.attributes.regionId === regionId);
+      if (waveSurferRegionObject) {
+        waveSurferRegionObject.remove();
+      }
+      dispatch(regionActions.regionRemoved(regionId));
     }
+  }
+
+  function removeSource() {
+    dispatch(regionActions.regionsRemoved(regions.map(region => region.id)));
+    source && URL.revokeObjectURL(source.originalData);
+    dispatch(sourceActions.sourceRemoved(sourceId));
   }
 
   const handlePlayPause = () => {
     if (wavesurfer.current) {
       wavesurfer.current.playPause();
-      const nowPlaying = wavesurfer.current.isPlaying();
-      onPlayPause(nowPlaying, surferID);
+      setPlaying(wavesurfer.current.isPlaying());
+      // onPlayPause(nowPlaying, sourceId);
     }
   };
-
-  useEffect(() => {
-    wavesurfer.current?.setVolume(volume);
-  }, [volume]);
 
   return (
     <>
@@ -287,16 +262,16 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
                 <Button
                   variant="contained"
                   size="small"
-                  startIcon={!props.playing ? <PlayIcon /> : <PauseIcon />}
+                  startIcon={!playing ? <PlayIcon /> : <PauseIcon />}
                   className={classes.button}
                   onClick={handlePlayPause}
                   disabled={!loaded}
                 >
-                  {!props.playing ? 'Play' : 'Pause'}
+                  {!playing ? 'Play' : 'Pause'}
                 </Button>
                 <Tooltip
                   title={
-                    'Focus zones identify exactly what sounds the search should try to match. You can add up to two.'
+                    'Focus zones identify exactly what sounds the search should try to match. You can add up to six.'
                   }
                 >
                   <span>
@@ -305,25 +280,29 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
                       variant="outlined"
                       className={classes.button}
                       size="small"
-                      disabled={!loaded || !numAvailableRegions}
+                      disabled={!loaded || !numRegionsAvailable}
                     >
-                      Add Focus Zone ({numAvailableRegions})
+                      Add Focus Zone ({numRegionsAvailable})
                     </Button>
                   </span>
                 </Tooltip>
-                {props.source &&
-                  props.source.regionStarts.map(region => {
+                {regions &&
+                  regions.map(region => {
                     if (region) {
                       return (
                         <Button
                           size="small"
                           className={classes.button}
-                          variant="outlined"
-                          color={regionColorsMui[region.id - 1]}
+                          // variant="outlined"
+                          color="primary"
                           key={region.id}
+                          style={{
+                            color: solidColorMap[region.id],
+                            // border: `1px solid ${solidColorMap[region.id]}`,
+                          }}
                           onClick={ev => removeRegion(region.id)}
                         >
-                          Remove Zone {region.id}
+                          Remove Zone {showIdMap[region.id]}
                         </Button>
                       );
                     } else {

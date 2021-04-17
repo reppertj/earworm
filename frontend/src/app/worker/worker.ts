@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
 import { resample } from 'wave-resampler';
-import { Source } from 'app/components/SearchForm';
 
 var spectrogramModel: tf.GraphModel;
 var encodingModel: tf.GraphModel;
@@ -157,7 +156,7 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min) + min);
 }
 
-export function downsampleSource(source: Source, regionStartIndex: number) {
+export function downsampleSource(source, regionStartIndex: number) {
   try {
     const { channelData, regionStarts } = source;
     var regionStartSeconds: number;

@@ -9,6 +9,7 @@ import { selectSpotifyAuth } from './slice/selectors';
 import IconButton from '@material-ui/core/IconButton';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import GREY from '@material-ui/core/colors/grey';
+import { selectSourcesAvailable } from '../SearchInputs/slice/selectors';
 
 const useStyles = makeStyles((theme: Theme) => ({
   margin: {
@@ -44,12 +45,12 @@ export default function SearchButton(props: Props) {
   const { accessToken } = useSelector(selectSpotifyAuth);
   const dispatch = useDispatch();
   const { actions } = useSpotifyAuthSlice();
+  const numSourcesAvailable = useSelector(selectSourcesAvailable);
   const classes = useStyles();
   const controller = new AbortController();
 
   const initiateGetResult = async ev => {
     ev.preventDefault();
-    console.log(searchInput);
     if (searchInput.length > 0) {
       try {
         setSearching(true);
@@ -75,7 +76,6 @@ export default function SearchButton(props: Props) {
         }
         result.json().then(data => {
           props.setSpotifyResults(data);
-          console.log(data);
         });
       } catch (error) {
         console.log('error', error);
@@ -94,7 +94,6 @@ export default function SearchButton(props: Props) {
 
   const handleSearchChange = ev => {
     ev.preventDefault();
-    console.log(ev.target.value);
     setSearchInput(ev.target.value);
   };
 
@@ -111,7 +110,12 @@ export default function SearchButton(props: Props) {
             <TextField
               id="standard-search"
               fullWidth
-              label="Search on Spotify"
+              disabled={numSourcesAvailable < 1}
+              label={
+                numSourcesAvailable < 1
+                  ? 'Clear a track to add more'
+                  : 'Search on Spotify'
+              }
               defaultValue={searchInput}
               type="search"
               onChange={ev => handleSearchChange(ev)}
@@ -120,11 +124,14 @@ export default function SearchButton(props: Props) {
           <Grid item>
             <IconButton
               color="primary"
-              disabled={searching}
+              disabled={searching || numSourcesAvailable < 1}
               aria-label="search for a song on Spotify"
               onClick={ev => initiateGetResult(ev)}
             >
-              <SpotifyIcon iconProps={{}} fillColor={undefined} />
+              <SpotifyIcon
+                iconProps={{}}
+                fillColor={numSourcesAvailable < 1 ? '#dadada' : undefined}
+              />
               {progress && (
                 <CircularProgress
                   size={27}
