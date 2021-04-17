@@ -13,7 +13,7 @@ import useTheme from '@material-ui/core/styles/useTheme';
 import DeleteIcon from '@material-ui/icons/DeleteOutline';
 
 import { useSelector, useDispatch } from 'react-redux';
-import { selectVolume } from './Playback/volumeSlice/selectors';
+import { selectVolume } from '../Playback/volumeSlice/selectors';
 
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugin/wavesurfer.regions';
@@ -25,15 +25,12 @@ import {
   selectRegionIdToAlphaColorMap,
   selectRegionIdToSolidColorMap,
   selectRegionIdToShowIdMap,
-} from './SearchInputs/Regions/slice/selectors';
-import { useRegionsSlice } from './SearchInputs/Regions/slice';
-import { useErrorSlice } from './Error/slice';
+} from './Regions/slice/selectors';
+import { useRegionsSlice } from './Regions/slice';
+import { useErrorSlice } from '../Error/slice';
 import { nanoid } from '@reduxjs/toolkit';
-import { useAudioSourcesSlice } from './SearchInputs/slice';
-import {
-  selectAllSources,
-  selectSourceByID,
-} from './SearchInputs/slice/selectors';
+import { useAudioSourcesSlice } from './slice';
+import { selectAllSources, selectSourceByID } from './slice/selectors';
 
 const useStyles = makeStyles(theme =>
   createStyles({

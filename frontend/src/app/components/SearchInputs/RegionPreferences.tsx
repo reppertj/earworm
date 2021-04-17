@@ -11,8 +11,8 @@ import {
   selectRegionByID,
   selectRegionIdToSolidColorMap,
   selectRegionIdToShowIdMap,
-} from './SearchInputs/Regions/slice/selectors';
-import { useRegionsSlice } from './SearchInputs/Regions/slice';
+} from './Regions/slice/selectors';
+import { useRegionsSlice } from './Regions/slice';
 
 interface RegionPreferencesProps {
   regionId: string;

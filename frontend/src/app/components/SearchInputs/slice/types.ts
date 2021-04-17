@@ -5,7 +5,7 @@ export interface Source {
   id: string;
   originalData: string;
   ready: boolean;
-  channelData?: string;
+  channelData?: Float32Array[];
   sampleRate?: number;
 }
 

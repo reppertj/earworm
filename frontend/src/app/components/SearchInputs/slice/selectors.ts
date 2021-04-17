@@ -15,6 +15,8 @@ export const selectSourceByID = defaultSourceSelectors.selectById;
 
 export const selectAllSources = defaultSourceSelectors.selectAll;
 
+export const selectAllEntities = defaultSourceSelectors.selectEntities;
+
 export const selectSourcesAvailable = createSelector(
   [selectNumSources],
   numSources => MAX_SOURCES - numSources,

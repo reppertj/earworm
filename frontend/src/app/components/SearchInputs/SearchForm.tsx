@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
+  selectAllEntities,
   selectAllSources,
   selectNumSources,
   selectSourcesAvailable,
 } from './slice/selectors';
-import { selectRegionsAvailable } from './Regions/slice/selectors';
+import {
+  selectAllRegions,
+  selectNumRegions,
+  selectRegionsAvailable,
+} from './Regions/slice/selectors';
 import { useErrorSlice } from '../Error/slice';
 
 import Box from '@material-ui/core/Box';
@@ -20,10 +25,10 @@ import Tooltip from '@material-ui/core/Tooltip';
 import { useDropzone } from 'react-dropzone';
 import getChannelDataAndSampleRate from '../../utils/audio';
 import { ConditionalWrapper } from '../ConditionalWrapper';
-import { UploadSurferPair } from '../UploadSurfer';
+import { UploadSurferPair } from './UploadSurfer';
 import { ErrorSnackBar } from '../Error/ErrorSnackBar';
 import SpotifySearchForm from '../Spotify/SpotifySearchForm';
-import SearchProgress from '../SearchProgress';
+import SearchProgress from './SearchProgress';
 import { SpotifyAuthorizationButton } from '../Spotify/SpotifyAuthorizationButton';
 import { SpotifyChooser } from '../Spotify/SpotifyResultChooser';
 import Worker from '../../worker';
@@ -139,6 +144,7 @@ function UploadWindow(props: UploadWindowProps) {
   const { actions: errorActions } = useErrorSlice();
   const { actions: sourceActions } = useAudioSourcesSlice();
   const numSourcesAvailable = useSelector(selectSourcesAvailable);
+  const numSources = useSelector(selectNumSources);
 
   const { open, getRootProps, getInputProps } = useDropzone({
     onDrop: acceptedFiles => {
@@ -175,11 +181,32 @@ function UploadWindow(props: UploadWindowProps) {
           <input {...getInputProps()} />
           <Grid container direction="column" spacing={3}>
             <Grid item>
-              {numSourcesAvailable > 1 && (
+              {!numSources && (
                 <Box pt={3}>
                   <Typography align="center" variant="h4" color="textPrimary">
                     Search for royalty-free music by sonic similarity.
                   </Typography>
+                  <Container maxWidth="md">
+                    <Typography
+                      variant="body1"
+                      align="center"
+                      color="textSecondary"
+                    >
+                      Add focus zones to zero in on particular sections and
+                      focus on the overall sound, genre, instrumentation, or
+                      mood.
+                      <br />
+                      You can also add multiple tracks and focus on different
+                      aspects of each one.
+                      <br />
+                      None of your music leaves your device; the analysis is
+                      done in your browser.
+                    </Typography>
+                  </Container>
+                </Box>
+              )}
+              {numSources && (
+                <Box pt={3}>
                   <Container maxWidth="md">
                     <Typography
                       variant="body1"
@@ -245,8 +272,12 @@ function SearchWindow(props) {
   >(undefined);
   const [results, setResults] = useState<Float32Array[]>(); // Placeholder while figuring out API
   const numSources = useSelector(selectNumSources);
+  const numRegions = useSelector(selectNumRegions);
+  const regions = useSelector(selectAllRegions);
+  const regionsAvailable = useSelector(selectRegionsAvailable);
 
   const sources = useSelector(selectAllSources);
+  const sourceMap = useSelector(selectAllEntities);
   const classes = useStyles();
 
   useEffect(() => {
@@ -255,69 +286,70 @@ function SearchWindow(props) {
 
   const handleSearchClick = useCallback(
     ev => {
-      // getMaybeMultipleChannelData(sources).then(sources => {
-      //   let sourcesNoFile: Sources = [];
-      //   for (let source of sources) {
-      //     if (source && source.channelData) {
-      //       sourcesNoFile.push({
-      //         id: source.id,
-      //         regionStarts: source.regionStarts,
-      //         channelData: source.channelData,
-      //       });
-      //     }
-      //   }
-      //   const processed: Promise<Float32Array[] | undefined> = new Promise(
-      //     async resolve => {
-      //       const embeddings: Float32Array[] = [];
-      //       const showSearchingTimout = setTimeout(
-      //         () => setSearching(true),
-      //         300,
-      //       );
-      //       for (let source of sourcesNoFile) {
-      //         if (source !== null) {
-      //           if (source.regionStarts.length > 0) {
-      //             for (let idx = 0; idx < source.regionStarts.length; idx++) {
-      //               setSearchProgressLabel(`Resampling`);
-      //               const resampledData = await inferenceWorker.downsampleSource(
-      //                 source,
-      //                 idx,
-      //               );
-      //               setSearchProgressLabel('Analyzing spectrum');
-      //               console.log('time', source.regionStarts[idx].seconds);
-      //               const embedding = await inferenceWorker.runInference(
-      //                 resampledData,
-      //                 source.regionStarts[idx].preference,
-      //               );
-      //               embeddings.push(embedding);
-      //             }
-      //           } else {
-      //             setSearchProgressLabel(`Resampling`);
-      //             const resampledData = await inferenceWorker.downsampleSource(
-      //               source,
-      //               0,
-      //             );
-      //             setSearchProgressLabel('Analyzing spectrum');
-      //             const embedding = await inferenceWorker.runInference(
-      //               resampledData,
-      //               4,
-      //             );
-      //             embeddings.push(embedding);
-      //           }
-      //         }
-      //       }
-      //       if (sourcesNoFile[0] !== null) {
-      //         console.log(embeddings);
-      //         setResults(embeddings);
-      //         resolve(embeddings);
-      //         clearTimeout(showSearchingTimout);
-      //         setSearching(false);
-      //         setSearchProgressLabel(undefined);
-      //       }
-      //     },
-      //   );
-      // });
+      new Promise(async resolve => {
+        const embeddings: Float32Array[] = [];
+        const showSearchingTimout = setTimeout(() => setSearching(true), 300);
+        interface InferenceRegion {
+          sourceId: string;
+          seconds: number;
+          preference: number;
+        }
+        const inferenceRegions: InferenceRegion[] = [];
+        if (numRegions === 0) {
+          const samplesPerSource = Math.floor(regionsAvailable / numSources);
+          for (const source of sources) {
+            if (source.channelData && source.sampleRate) {
+              const duration = source.channelData[0].length / source.sampleRate;
+              inferenceRegions.push(
+                ...[...Array(samplesPerSource).keys()].map(n => ({
+                  sourceId: source.id,
+                  seconds: ((n + 1) * duration) / (samplesPerSource + 1),
+                  preference: 4,
+                })),
+              );
+            }
+          }
+        } else {
+          inferenceRegions.push(
+            ...regions.map(r => ({
+              sourceId: r.sourceId,
+              seconds: r.seconds,
+              preference: r.preference,
+            })),
+          );
+        }
+
+        for (let idx = 0; idx < inferenceRegions.length; idx++) {
+          const infReg = inferenceRegions[idx];
+          setSearchProgressLabel(
+            `Resampling zone ${idx + 1} of ${inferenceRegions.length}`,
+          );
+          try {
+            const resampled = await inferenceWorker.downsampleSource(
+              sourceMap[infReg.sourceId],
+              infReg.seconds,
+            );
+            setSearchProgressLabel(
+              `Analyzing zone ${idx + 1} of ${inferenceRegions.length}`,
+            );
+            const embedding = await inferenceWorker.runInference(
+              resampled,
+              infReg.preference,
+            );
+            embeddings.push(embedding);
+          } catch (e) {
+            console.log('Error during inference', e);
+          }
+        }
+        console.log(embeddings);
+        setResults(embeddings);
+        resolve(embeddings);
+        clearTimeout(showSearchingTimout);
+        setSearching(false);
+        setSearchProgressLabel(undefined);
+      });
     },
-    [sources],
+    [numRegions, numSources, regions, regionsAvailable, sourceMap, sources],
   );
 
   return (
@@ -340,15 +372,16 @@ function SearchWindow(props) {
                 color="primary"
                 variant="contained"
                 size="large"
+                disabled={searching}
                 onClick={handleSearchClick}
               >
-                Analyze and Search
+                {searching ? searchProgressLabel : 'Analyze and Search'}
               </Button>
             </Box>
           </Grid>
         )}
         <Grid item>
-          <SearchProgress searching={searching} label={searchProgressLabel} />
+          <SearchProgress searching={searching} />
         </Grid>
         {results}
       </Grid>

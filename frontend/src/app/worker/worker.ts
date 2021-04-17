@@ -1,3 +1,4 @@
+import { Source } from './../components/SearchInputs/slice/types';
 import * as tf from '@tensorflow/tfjs';
 import { resample } from 'wave-resampler';
 
@@ -156,30 +157,15 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min) + min);
 }
 
-export function downsampleSource(source, regionStartIndex: number) {
+export function downsampleSource(source: Source, startTime: number) {
   try {
-    const { channelData, regionStarts } = source;
-    var regionStartSeconds: number;
-    if (regionStarts[regionStartIndex] !== undefined) {
-      regionStartSeconds = regionStarts[regionStartIndex].seconds;
-    } else {
-      if (channelData) {
-        const [channeledAudioData, sampleRate] = channelData;
-        const numSamples = channeledAudioData[0].length;
-        const startAt = getRandomInt(0, numSamples - 3 * sampleRate);
-        regionStartSeconds = Math.floor(startAt / sampleRate);
-        console.log(regionStartSeconds);
-      } else {
-        regionStartSeconds = 0;
-      }
-    }
+    const { channelData, sampleRate } = source;
     const resampledAudioData: Float32Array[] = [];
-    if (channelData) {
-      const [channeledAudioData, sampleRate] = channelData;
-      for (let channel of channeledAudioData) {
+    if (channelData && sampleRate) {
+      for (let channel of channelData) {
         const sliced = channel.slice(
-          sampleRate * regionStartSeconds,
-          sampleRate * (regionStartSeconds + 3),
+          sampleRate * startTime,
+          sampleRate * (startTime + 3),
         );
         const resampled = resample(sliced, sampleRate, 22050, {
           method: 'sinc',

@@ -3,6 +3,7 @@ import { SpotifyAuthState } from 'app/components/Spotify/slice/types';
 import { AudioSourcesState } from 'app/components/SearchInputs/slice/types';
 import { RegionsState } from 'app/components/SearchInputs/Regions/slice/types';
 import { ErrorState } from 'app/components/Error/slice/types';
+import { SearchResultsState } from 'app/components/SearchResults/slice/types';
 // [IMPORT NEW CONTAINERSTATE ABOVE] < Needed for generating containers seamlessly
 
 /* 
@@ -15,5 +16,6 @@ export interface RootState {
   audioSources?: AudioSourcesState;
   regions?: RegionsState;
   error?: ErrorState;
+  searchResults?: SearchResultsState;
   // [INSERT NEW REDUCER KEY ABOVE] < Needed for generating containers seamlessly
 }
