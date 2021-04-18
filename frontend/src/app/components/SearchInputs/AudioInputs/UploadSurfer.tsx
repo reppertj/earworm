@@ -231,8 +231,17 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
   }
 
   function removeSource() {
+    if (wavesurfer.current) {
+      // hack b/c wavesurfer has a memory leak and doesn't free all references on destory
+      wavesurfer.current.load('%PUBLIC_URL%/250-milliseconds-of-silence.mp3');
+      wavesurfer.current.destroy();
+      wavesurfer.current = null;
+      setLoaded(false);
+    }
+    if (source?.originalData) {
+      URL.revokeObjectURL(source.originalData);
+    }
     dispatch(regionActions.regionsRemoved(regions.map(region => region.id)));
-    source && URL.revokeObjectURL(source.originalData);
     dispatch(sourceActions.sourceRemoved(sourceId));
   }
 
@@ -257,7 +266,7 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
                 <Button
                   variant="contained"
                   size="small"
-                  startIcon={!playing ? <PlayIcon /> : <PauseIcon />}
+                  startIcon={loaded && !playing ? <PlayIcon /> : <PauseIcon />}
                   className={classes.button}
                   onClick={handlePlayPause}
                   disabled={!loaded}

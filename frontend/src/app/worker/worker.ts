@@ -148,7 +148,7 @@ export async function runInference(
     console.log(
       `Ran inference using ${tf.getBackend()} backend in ${end - start} ms`,
     );
-    return embeddingsData;
+    return Array.from(embeddingsData);
   } catch (err) {
     console.log('Error running inference:', err);
     throw err;

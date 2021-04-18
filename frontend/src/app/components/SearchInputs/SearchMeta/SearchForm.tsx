@@ -34,6 +34,7 @@ import { selectSpotifyAuth } from '../../Spotify/slice/selectors';
 import { useAudioSourcesSlice } from '../AudioInputs/slice';
 import { Source } from '../AudioInputs/slice/types';
 import { nanoid } from '@reduxjs/toolkit';
+import { embeddingsActions, useEmbeddingsSlice } from './slice';
 
 var inferenceWorker = new Worker();
 
@@ -259,9 +260,9 @@ function SearchWindow(props) {
   const [searchProgressLabel, setSearchProgressLabel] = useState<
     string | undefined
   >(undefined);
-  const [results, setResults] = useState<Float32Array[]>(); // Placeholder while figuring out API
   const dispatch = useDispatch();
   const { actions: errorActions } = useErrorSlice();
+  const { actions: embeddingActions } = useEmbeddingsSlice();
   const numSources = useSelector(selectNumSources);
   const numRegions = useSelector(selectNumRegions);
   const regions = useSelector(selectAllRegions);
@@ -278,7 +279,7 @@ function SearchWindow(props) {
   const handleSearchClick = useCallback(
     ev => {
       new Promise(async resolve => {
-        const embeddings: Float32Array[] = [];
+        const embeddings: number[][] = [];
         const showSearchingTimout = setTimeout(() => setSearching(true), 300);
         interface InferenceRegion {
           sourceId: string;
@@ -341,11 +342,16 @@ function SearchWindow(props) {
           }
         }
         console.log(embeddings);
-        setResults(embeddings);
         resolve(embeddings);
         clearTimeout(showSearchingTimout);
         setSearching(false);
         setSearchProgressLabel(undefined);
+        dispatch(
+          embeddingsActions.embeddingsAdded({
+            id: nanoid(),
+            embeddings,
+          }),
+        );
       });
     },
     [
@@ -391,7 +397,6 @@ function SearchWindow(props) {
         <Grid item>
           <SearchProgress searching={searching} />
         </Grid>
-        {results}
       </Grid>
     </>
   );

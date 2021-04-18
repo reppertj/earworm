@@ -15,7 +15,6 @@ function* preprocessAudioData({ payload }: { payload: Source[] }) {
           getChannelDataAndSampleRate,
           source.originalData,
         );
-        console.log(actions.sourceUpdated.type);
         yield put(
           actions.sourceUpdated({
             id: source.id,

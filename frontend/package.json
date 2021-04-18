@@ -125,6 +125,7 @@
       "pre-commit": "yarn run checkTs && lint-staged"
     }
   },
+  "proxy": "http://localhost",
   "jest": {
     "collectCoverageFrom": [
       "src/**/*.{js,jsx,ts,tsx}",

@@ -58,7 +58,7 @@ export default function SearchButton(props: Props) {
         const apiTimer = setTimeout(() => controller.abort(), 6000);
         const API_URL = `https://api.spotify.com/v1/search?query=${encodeURIComponent(
           searchInput,
-        )}&type=track&limit=30`;
+        )}&type=track&limit=50`;
         const result = await fetch(API_URL, {
           method: 'GET',
           cache: 'default',

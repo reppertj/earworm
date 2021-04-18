@@ -18,14 +18,11 @@ declare module 'comlink-loader!*' {
     // Add declarations here; return type should be wrapped in a promise
 
     warmupModels(): Promise<boolean>;
-    downsampleSource(
-      source: Source,
-      regionStartIdx: number,
-    ): Promise<Float32Array[]>;
+    downsampleSource(source, startTime: number): Promise<Float32Array[]>;
     runInference(
       channelArray: Float32Array[],
       preference: number,
-    ): Promise<Float32Array>;
+    ): Promise<number[]>;
   }
   export = WebpackWorker;
 }

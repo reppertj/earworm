@@ -4,6 +4,7 @@ import { AudioSourcesState } from 'app/components/SearchInputs/AudioInputs/slice
 import { RegionsState } from 'app/components/SearchInputs/Regions/slice/types';
 import { ErrorState } from 'app/components/Error/slice/types';
 import { SearchResultsState } from 'app/components/SearchResults/slice/types';
+import { EmbeddingsState } from 'app/components/SearchInputs/SearchMeta/slice/types';
 // [IMPORT NEW CONTAINERSTATE ABOVE] < Needed for generating containers seamlessly
 
 /* 
@@ -17,5 +18,6 @@ export interface RootState {
   regions?: RegionsState;
   error?: ErrorState;
   searchResults?: SearchResultsState;
+  embeddings?: EmbeddingsState;
   // [INSERT NEW REDUCER KEY ABOVE] < Needed for generating containers seamlessly
 }

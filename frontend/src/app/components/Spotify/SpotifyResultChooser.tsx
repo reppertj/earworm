@@ -176,7 +176,7 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
   const { actions } = useAudioSourcesSlice();
 
   const items: Array<any> = props.spotifyResults.tracks.items;
-  const processed = removeUnpreviewableItems(items).map(getInfo).slice(0, 20);
+  const processed = removeUnpreviewableItems(items).map(getInfo).slice(0, 30);
 
   const handleChange = useCallback(
     ev => {
@@ -216,7 +216,6 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
       setCurrentlyPlayingRef,
     }),
   );
-  console.log(processed);
 
   return (
     <>
