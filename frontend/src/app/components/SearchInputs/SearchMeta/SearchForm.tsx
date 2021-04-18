@@ -43,33 +43,6 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-// interface RegionStart {
-//   id: number;
-//   seconds: number;
-//   preference: number;
-// }
-
-// interface Source {
-//   id: number;
-//   regionStarts: RegionStart[];
-//   source?: string | File;
-//   channelData?: FullAudioData;
-// }
-
-// type Sources = Array<Source | null>;
-
-// async function getMaybeMultipleChannelData(sources: Sources): Promise<Sources> {
-//   const newSources = sources.slice();
-//   for (let i = 0; i < sources.length; i++) {
-//     const source = newSources[i];
-//     if (source && source.source) {
-//       const channelData = await getChannelDataAndSampleRate(source.source);
-//       newSources[i] = { channelData, ...source };
-//     }
-//   }
-//   return newSources;
-// }
-
 function MusicSearchForm(props) {
   const [hasError, setHasError] = useState({ error: false, message: '' });
   const [spotifyResults, setSpotifyResults] = useState<any>(null);
@@ -94,6 +67,21 @@ function MusicSearchForm(props) {
       );
     }
   }, [loggedIn, tokenExpiryDate, hasError]);
+
+  useEffect(() => {
+    if (hasError.error) {
+      dispatch(
+        errorActions.errorAdded({
+          id: nanoid(),
+          error: true,
+          message:
+            hasError.message ||
+            'Encountered an error. Try refreshing the page.',
+        }),
+      );
+      setHasError({ error: false, message: '' });
+    }
+  }, [dispatch, errorActions, hasError]);
 
   useEffect(() => {
     if (!chooserOpen && spotifyResults) {
