@@ -2,6 +2,7 @@ import { EntityState } from '@reduxjs/toolkit';
 
 /* --- STATE --- */
 export interface Error {
+  id: string;
   error: boolean;
   message: string;
 }

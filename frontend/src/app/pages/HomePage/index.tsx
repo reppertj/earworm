@@ -6,6 +6,7 @@ import Typography from '@material-ui/core/Typography';
 import AppBar from '../../components/AppBar';
 import MusicSearchForm from '../../components/SearchInputs/SearchForm';
 import Copyright from '../../components/Copyright';
+import { ErrorSnackBar } from 'app/components/Error/ErrorSnackBar';
 
 const useStyles = makeStyles(theme => ({
   icon: {
@@ -36,6 +37,7 @@ export function HomePage() {
       <main>
         <AppBar />
         <MusicSearchForm />
+        <ErrorSnackBar />
       </main>
       <footer className={classes.footer}>
         <Typography variant="h6" align="center" gutterBottom>

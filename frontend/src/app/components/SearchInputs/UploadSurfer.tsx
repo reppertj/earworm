@@ -202,7 +202,7 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
       const surferRegion = wavesurfer.current.addRegion({
         start,
         end: start + 3,
-        loop: true,
+        loop: false,
         drag: true,
         resize: false,
         color: alphaColorMap[regionId],

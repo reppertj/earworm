@@ -1,39 +1,35 @@
 import React from 'react';
 import Snackbar from '@material-ui/core/Snackbar';
 import MuiAlert, { AlertProps } from '@material-ui/lab/Alert';
+import { useSelector, useDispatch } from 'react-redux';
+import { useErrorSlice } from './slice';
+import { selectAllErrors } from './slice/selectors';
 
 function Alert(props: AlertProps) {
   return <MuiAlert elevation={6} variant="filled" {...props} />;
 }
 
-interface Props {
-  hasError: {
-    error: boolean;
-    message: string;
-  };
-  setHasError: React.Dispatch<
-    React.SetStateAction<{
-      error: boolean;
-      message: string;
-    }>
-  >;
-}
+export const ErrorSnackBar = React.forwardRef((props, ref) => {
+  const errors = useSelector(selectAllErrors);
+  const dispatch = useDispatch();
+  const { actions } = useErrorSlice();
 
-export const ErrorSnackBar = React.forwardRef((props: Props, ref) => {
-  const resetErrorState = () => {
-    props.setHasError({ error: false, message: '' });
+  const clearOneError = (errorId: string) => {
+    dispatch(actions.errorRemoved(errorId));
   };
+
+  const bottomError = errors[0];
 
   return (
     <div>
-      {props.hasError.error && (
+      {bottomError && (
         <Snackbar
           ref={ref}
           open={true}
           autoHideDuration={8000}
-          onClose={resetErrorState}
+          onClose={() => clearOneError(bottomError.id)}
         >
-          <Alert severity="error">{props.hasError.message}</Alert>
+          <Alert severity="error">{bottomError.message}</Alert>
         </Snackbar>
       )}
     </div>

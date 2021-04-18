@@ -148,13 +148,8 @@ export async function runInference(
     return embeddingsData;
   } catch (err) {
     console.log('Error running inference:', err);
+    throw err;
   }
-}
-
-function getRandomInt(min, max) {
-  min = Math.ceil(min);
-  max = Math.floor(max);
-  return Math.floor(Math.random() * (max - min) + min);
 }
 
 export function downsampleSource(source: Source, startTime: number) {
@@ -163,10 +158,12 @@ export function downsampleSource(source: Source, startTime: number) {
     const resampledAudioData: Float32Array[] = [];
     if (channelData && sampleRate) {
       for (let channel of channelData) {
-        const sliced = channel.slice(
+        const start = Math.min(
           sampleRate * startTime,
-          sampleRate * (startTime + 3),
+          channel.length - 3.01 * sampleRate,
         );
+        const end = start + sampleRate * 3;
+        const sliced = channel.slice(start, end);
         const resampled = resample(sliced, sampleRate, 22050, {
           method: 'sinc',
         });

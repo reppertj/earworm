@@ -76,9 +76,9 @@ function MusicSearchForm(props) {
   const [hasError, setHasError] = useState({ error: false, message: '' });
   const [spotifyResults, setSpotifyResults] = useState<any>(null);
   const [chooserOpen, setChooserOpen] = useState(false);
-
+  const dispatch = useDispatch();
+  const { actions: errorActions } = useErrorSlice();
   const { loggedIn, tokenExpiryDate } = useSelector(selectSpotifyAuth);
-
   const sources = useSelector(selectAllSources);
 
   const SpotifyElement = useMemo(() => {
@@ -101,28 +101,32 @@ function MusicSearchForm(props) {
   useEffect(() => {
     if (!chooserOpen && spotifyResults) {
       if (!spotifyResults.tracks) {
-        setHasError({
-          error: true,
-          message:
-            "Couldn't process the results from Spotify. Sorry about that.",
-        });
+        dispatch(
+          errorActions.errorAdded({
+            id: nanoid(),
+            error: true,
+            message:
+              "Couldn't process the results from Spotify. Sorry about that.",
+          }),
+        );
       } else if (spotifyResults.tracks.items.length < 1) {
-        setHasError({
-          error: true,
-          message: 'No results! Try searching for something else.',
-        });
+        dispatch(
+          errorActions.errorAdded({
+            id: nanoid(),
+            error: true,
+            message: 'No results! Try searching for something else.',
+          }),
+        );
       } else {
         setChooserOpen(true);
       }
     }
-  }, [spotifyResults, chooserOpen]);
+  }, [spotifyResults, chooserOpen, dispatch, errorActions]);
 
   return (
     <>
       <UploadWindow SpotifyElement={SpotifyElement} />
-      {hasError.error && (
-        <ErrorSnackBar hasError={hasError} setHasError={setHasError} />
-      )}
+
       {chooserOpen && (
         <SpotifyChooser
           spotifyResults={spotifyResults}
@@ -160,10 +164,13 @@ function UploadWindow(props: UploadWindowProps) {
         });
         dispatch(sourceActions.sourcesAddedIfRoom(newSources));
       } catch (e) {
-        errorActions.errorAdded({
-          error: true,
-          message: 'Encountered a problem loading files. Sorry about that.',
-        });
+        dispatch(
+          errorActions.errorAdded({
+            id: nanoid(),
+            error: true,
+            message: 'Encountered a problem loading files. Sorry about that.',
+          }),
+        );
         console.log(e);
       }
     },
@@ -192,15 +199,12 @@ function UploadWindow(props: UploadWindowProps) {
                       align="center"
                       color="textSecondary"
                     >
-                      Add focus zones to zero in on particular sections and
-                      focus on the overall sound, genre, instrumentation, or
-                      mood.
+                      {' '}
+                      Looking for that perfect song to use in your next video or
+                      game?
                       <br />
-                      You can also add multiple tracks and focus on different
-                      aspects of each one.
-                      <br />
-                      None of your music leaves your device; the analysis is
-                      done in your browser.
+                      Find something similar to what you already love with an
+                      AI-powered search.
                     </Typography>
                   </Container>
                 </Box>
@@ -210,14 +214,14 @@ function UploadWindow(props: UploadWindowProps) {
                   <Container maxWidth="md">
                     <Typography
                       variant="body1"
-                      align="center"
+                      align="justify"
                       color="textSecondary"
                     >
-                      Looking for that perfect song to use in your next video or
-                      game?
-                      <br />
-                      Find something similar to what you already love with an
-                      AI-powered search.
+                      Add focus zones to zero in on particular sections and
+                      focus on the overall sound, genre, instrumentation, or
+                      mood. You can also add multiple tracks and focus on
+                      different aspects of each one. None of your music leaves
+                      your device; the analysis is done in your browser.
                     </Typography>
                   </Container>
                 </Box>
@@ -271,6 +275,8 @@ function SearchWindow(props) {
     string | undefined
   >(undefined);
   const [results, setResults] = useState<Float32Array[]>(); // Placeholder while figuring out API
+  const dispatch = useDispatch();
+  const { actions: errorActions } = useErrorSlice();
   const numSources = useSelector(selectNumSources);
   const numRegions = useSelector(selectNumRegions);
   const regions = useSelector(selectAllRegions);
@@ -338,7 +344,15 @@ function SearchWindow(props) {
             );
             embeddings.push(embedding);
           } catch (e) {
+            dispatch(
+              errorActions.errorAdded({
+                id: nanoid(),
+                error: true,
+                message: 'Error running the machine learning model.',
+              }),
+            );
             console.log('Error during inference', e);
+            break;
           }
         }
         console.log(embeddings);
