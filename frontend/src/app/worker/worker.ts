@@ -72,13 +72,9 @@ export async function warmupModels() {
           end - start
         } ms`,
       );
-      return true;
     } catch (err) {
       console.log('Error warming up models:', err);
-      return false;
     }
-  } else {
-    return true;
   }
 }
 
