@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Switch, Route, BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from 'react-query';
 
 import { createMuiTheme } from '@material-ui/core';
 import { ThemeProvider, StylesProvider } from '@material-ui/core/styles';
@@ -35,6 +36,8 @@ const theme = createMuiTheme({
   },
 });
 
+const queryClient = new QueryClient();
+
 export function App() {
   const { i18n } = useTranslation();
   return (
@@ -59,10 +62,12 @@ export function App() {
           </Helmet>
 
           <ThemeProvider theme={theme}>
-            <Switch>
-              <Route exact path="/" component={HomePage} />
-              <Route component={NotFoundPage} />
-            </Switch>
+            <QueryClientProvider client={queryClient}>
+              <Switch>
+                <Route exact path="/" component={HomePage} />
+                <Route component={NotFoundPage} />
+              </Switch>
+            </QueryClientProvider>
           </ThemeProvider>
         </StylesProvider>
       </BrowserRouter>

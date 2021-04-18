@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState, useMemo } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 
 import Box from '@material-ui/core/Box';
 import Grid from '@material-ui/core/Grid';
@@ -27,7 +27,6 @@ import {
   selectRegionIdToShowIdMap,
 } from './Regions/slice/selectors';
 import { useRegionsSlice } from './Regions/slice';
-import { useErrorSlice } from '../Error/slice';
 import { nanoid } from '@reduxjs/toolkit';
 import { useAudioSourcesSlice } from './slice';
 import { selectAllSources, selectSourceByID } from './slice/selectors';
@@ -42,8 +41,7 @@ const useStyles = makeStyles(theme =>
 
 // interface UploadSurferPairProps {}
 
-function UploadSurferPair() {
-  const dispatch = useDispatch();
+function UploadSurferGroup() {
   const sources = useSelector(selectAllSources);
   const regions = useSelector(selectAllRegions);
 
@@ -332,4 +330,4 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
   );
 });
 
-export { UploadSurferPair };
+export { UploadSurferGroup as UploadSurferPair };

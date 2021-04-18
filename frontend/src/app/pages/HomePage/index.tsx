@@ -7,6 +7,8 @@ import AppBar from '../../components/AppBar';
 import MusicSearchForm from '../../components/SearchInputs/SearchForm';
 import Copyright from '../../components/Copyright';
 import { ErrorSnackBar } from 'app/components/Error/ErrorSnackBar';
+import { ResultsWindow } from 'app/components/SearchResults/ResultsWindow';
+import { ReactQueryDevtools } from 'react-query/devtools';
 
 const useStyles = makeStyles(theme => ({
   icon: {
@@ -37,7 +39,9 @@ export function HomePage() {
       <main>
         <AppBar />
         <MusicSearchForm />
+        <ResultsWindow />
         <ErrorSnackBar />
+        <ReactQueryDevtools initialIsOpen={false} />
       </main>
       <footer className={classes.footer}>
         <Typography variant="h6" align="center" gutterBottom>

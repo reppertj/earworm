@@ -23,10 +23,8 @@ import CloudUploadIcon from '@material-ui/icons/CloudUpload';
 import Tooltip from '@material-ui/core/Tooltip';
 
 import { useDropzone } from 'react-dropzone';
-import getChannelDataAndSampleRate from '../../utils/audio';
 import { ConditionalWrapper } from '../ConditionalWrapper';
 import { UploadSurferPair } from './UploadSurfer';
-import { ErrorSnackBar } from '../Error/ErrorSnackBar';
 import SpotifySearchForm from '../Spotify/SpotifySearchForm';
 import SearchProgress from './SearchProgress';
 import { SpotifyAuthorizationButton } from '../Spotify/SpotifyAuthorizationButton';
@@ -79,7 +77,6 @@ function MusicSearchForm(props) {
   const dispatch = useDispatch();
   const { actions: errorActions } = useErrorSlice();
   const { loggedIn, tokenExpiryDate } = useSelector(selectSpotifyAuth);
-  const sources = useSelector(selectAllSources);
 
   const SpotifyElement = useMemo(() => {
     if (
@@ -363,7 +360,16 @@ function SearchWindow(props) {
         setSearchProgressLabel(undefined);
       });
     },
-    [numRegions, numSources, regions, regionsAvailable, sourceMap, sources],
+    [
+      dispatch,
+      errorActions,
+      numRegions,
+      numSources,
+      regions,
+      regionsAvailable,
+      sourceMap,
+      sources,
+    ],
   );
 
   return (

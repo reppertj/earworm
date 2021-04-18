@@ -1,12 +1,5 @@
 import { nanoid } from '@reduxjs/toolkit';
-import {
-  take,
-  call,
-  put,
-  select,
-  takeLatest,
-  takeEvery,
-} from 'redux-saga/effects';
+import { call, put, select, takeEvery } from 'redux-saga/effects';
 import { selectSourceByID } from './selectors';
 import { Source } from './types';
 import { audioSourcesActions as actions } from '.';
