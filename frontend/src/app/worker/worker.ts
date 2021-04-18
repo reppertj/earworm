@@ -50,20 +50,24 @@ export async function warmupModels() {
     try {
       const start = Date.now();
       const WAVEFORM_SHAPE = [1, 22050 * 3];
-      const warmed_sgram = (await spectrogramModel.executeAsync(
-        { 'unknown:0': tf.zeros(WAVEFORM_SHAPE) },
+      const modelInput = tf.zeros(WAVEFORM_SHAPE);
+      const warmedSgram = (await spectrogramModel.executeAsync(
+        { 'unknown:0': modelInput },
         'Identity:0',
       )) as tf.Tensor;
-      const warmed_encoding = encodingModel.execute(
-        { 'unknown:0': warmed_sgram },
+      tf.dispose(modelInput);
+      const warmedEncoding = encodingModel.execute(
+        { 'unknown:0': warmedSgram },
         'Identity:0',
       ) as tf.Tensor;
-      tf.dispose(warmed_sgram);
+      tf.dispose(warmedSgram);
+      const samplePreference = tf.zeros([], 'int32');
       const warmed_embedding = embeddingModel.execute(
-        { 'unknown:0': warmed_encoding, unknown_0: tf.zeros([], 'int32') },
+        { 'unknown:0': warmedEncoding, unknown_0: samplePreference },
         'Identity: 0',
       );
-      tf.dispose(warmed_encoding);
+      tf.dispose(samplePreference);
+      tf.dispose(warmedEncoding);
       tf.dispose(warmed_embedding);
       warmedUp = true;
       const end = Date.now();
@@ -124,15 +128,18 @@ export async function runInference(
       { 'unknown:0': inputTensor },
       'Identity:0',
     )) as tf.Tensor;
+    tf.dispose(inputTensor);
     const encoded = encodingModel.execute(
       { 'unknown:0': sgram },
       'Identity:0',
     ) as tf.Tensor;
     tf.dispose(sgram);
+    const preferenceTensor = tf.scalar(preference, 'int32');
     const embedded = embeddingModel.execute(
-      { 'unknown:0': encoded, unknown_0: tf.scalar(preference, 'int32') },
+      { 'unknown:0': encoded, unknown_0: preferenceTensor },
       'Identity: 0',
     ) as tf.Tensor;
+    tf.dispose(preferenceTensor);
     tf.dispose(encoded);
     const embeddingsData = await embedded.data();
     tf.dispose(embedded);
