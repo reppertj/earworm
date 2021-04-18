@@ -25,7 +25,7 @@ import makeStyles from '@material-ui/core/styles/makeStyles';
 import Radio from '@material-ui/core/Radio';
 import { AudioButton } from '../Playback/AudioButton/AudioButton';
 import { useDispatch } from 'react-redux';
-import { useAudioSourcesSlice } from '../SearchInputs/slice';
+import { useAudioSourcesSlice } from '../SearchInputs/AudioInputs/slice';
 import { nanoid } from '@reduxjs/toolkit';
 
 const useStyles = makeStyles(theme => ({

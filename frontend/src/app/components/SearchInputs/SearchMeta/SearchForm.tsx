@@ -5,13 +5,13 @@ import {
   selectAllSources,
   selectNumSources,
   selectSourcesAvailable,
-} from './slice/selectors';
+} from '../AudioInputs/slice/selectors';
 import {
   selectAllRegions,
   selectNumRegions,
   selectRegionsAvailable,
-} from './Regions/slice/selectors';
-import { useErrorSlice } from '../Error/slice';
+} from '../Regions/slice/selectors';
+import { useErrorSlice } from '../../Error/slice';
 
 import Box from '@material-ui/core/Box';
 import Container from '@material-ui/core/Container';
@@ -23,16 +23,16 @@ import CloudUploadIcon from '@material-ui/icons/CloudUpload';
 import Tooltip from '@material-ui/core/Tooltip';
 
 import { useDropzone } from 'react-dropzone';
-import { ConditionalWrapper } from '../ConditionalWrapper';
-import { UploadSurferPair } from './UploadSurfer';
-import SpotifySearchForm from '../Spotify/SpotifySearchForm';
+import { ConditionalWrapper } from '../../ConditionalWrapper';
+import { UploadSurferPair } from '../AudioInputs/UploadSurfer';
+import SpotifySearchForm from '../../Spotify/SpotifySearchForm';
 import SearchProgress from './SearchProgress';
-import { SpotifyAuthorizationButton } from '../Spotify/SpotifyAuthorizationButton';
-import { SpotifyChooser } from '../Spotify/SpotifyResultChooser';
-import Worker from '../../worker';
-import { selectSpotifyAuth } from '../Spotify/slice/selectors';
-import { useAudioSourcesSlice } from './slice';
-import { Source } from './slice/types';
+import { SpotifyAuthorizationButton } from '../../Spotify/SpotifyAuthorizationButton';
+import { SpotifyChooser } from '../../Spotify/SpotifyResultChooser';
+import Worker from '../../../worker';
+import { selectSpotifyAuth } from '../../Spotify/slice/selectors';
+import { useAudioSourcesSlice } from '../AudioInputs/slice';
+import { Source } from '../AudioInputs/slice/types';
 import { nanoid } from '@reduxjs/toolkit';
 
 var inferenceWorker = new Worker();

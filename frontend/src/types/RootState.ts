@@ -1,6 +1,6 @@
 import { VolumeState } from 'app/components/Playback/volumeSlice/types';
 import { SpotifyAuthState } from 'app/components/Spotify/slice/types';
-import { AudioSourcesState } from 'app/components/SearchInputs/slice/types';
+import { AudioSourcesState } from 'app/components/SearchInputs/AudioInputs/slice/types';
 import { RegionsState } from 'app/components/SearchInputs/Regions/slice/types';
 import { ErrorState } from 'app/components/Error/slice/types';
 import { SearchResultsState } from 'app/components/SearchResults/slice/types';

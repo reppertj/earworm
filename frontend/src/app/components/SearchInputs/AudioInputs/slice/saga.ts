@@ -3,7 +3,7 @@ import { call, put, select, takeEvery } from 'redux-saga/effects';
 import { selectSourceByID } from './selectors';
 import { Source } from './types';
 import { audioSourcesActions as actions } from '.';
-import { errorActions } from './../../Error/slice';
+import { errorActions } from '../../../Error/slice';
 import getChannelDataAndSampleRate from 'app/utils/audio';
 
 function* preprocessAudioData({ payload }: { payload: Source[] }) {

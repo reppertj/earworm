@@ -4,7 +4,7 @@ import makeStyles from '@material-ui/core/styles/makeStyles';
 import Typography from '@material-ui/core/Typography';
 
 import AppBar from '../../components/AppBar';
-import MusicSearchForm from '../../components/SearchInputs/SearchForm';
+import MusicSearchForm from '../../components/SearchInputs/SearchMeta/SearchForm';
 import Copyright from '../../components/Copyright';
 import { ErrorSnackBar } from 'app/components/Error/ErrorSnackBar';
 import { ResultsWindow } from 'app/components/SearchResults/ResultsWindow';

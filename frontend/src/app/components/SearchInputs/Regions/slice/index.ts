@@ -3,7 +3,7 @@ import { createSlice } from 'utils/@reduxjs/toolkit';
 import { useInjectReducer } from 'utils/redux-injectors';
 import { Region, RegionsState } from './types';
 
-import { audioSourcesActions } from './../../slice/index';
+import { audioSourcesActions } from '../../AudioInputs/slice';
 
 export const regionsAdapter = createEntityAdapter<Region>();
 

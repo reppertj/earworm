@@ -1,4 +1,4 @@
-import { Source } from './../components/SearchInputs/slice/types';
+import { Source } from '../components/SearchInputs/AudioInputs/slice/types';
 import * as tf from '@tensorflow/tfjs';
 import { resample } from 'wave-resampler';
 
