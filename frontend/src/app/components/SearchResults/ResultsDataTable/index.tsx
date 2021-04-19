@@ -9,7 +9,7 @@ import {
   selectAllSearchResults,
   selectSearchResultsIds,
 } from '../slice/selectors';
-import { DataGrid, ColDef } from '@material-ui/data-grid';
+import { DataGrid, GridColDef } from '@material-ui/data-grid';
 import Link from '@material-ui/core/Link';
 import LinkIcon from '@material-ui/icons/Link';
 import Box from '@material-ui/core/Box';
@@ -29,7 +29,7 @@ export function ResultsDataTable(props: Props) {
   const searchResults = useSelector(selectAllSearchResults);
   const searchResultsIds = useSelector(selectSearchResultsIds);
 
-  const columns: ColDef[] = [
+  const columns: GridColDef[] = [
     { field: 'percentMatch', headerName: '% Match', width: 120 },
     {
       field: 'previewUrl',

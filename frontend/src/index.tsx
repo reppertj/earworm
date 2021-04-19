@@ -18,8 +18,6 @@ import 'sanitize.css/sanitize.css';
 // Import root app
 import { App } from 'app';
 
-import { HelmetProvider } from 'react-helmet-async';
-
 import { configureAppStore, rootSaga } from 'store/configureStore';
 
 import reportWebVitals from 'reportWebVitals';
@@ -42,11 +40,9 @@ const MOUNT_NODE = document.getElementById('root') as HTMLElement;
   console.log(ga4react);
   ReactDOM.render(
     <Provider store={store}>
-      <HelmetProvider>
-        <React.StrictMode>
-          <App />
-        </React.StrictMode>
-      </HelmetProvider>
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
     </Provider>,
     MOUNT_NODE,
   );
