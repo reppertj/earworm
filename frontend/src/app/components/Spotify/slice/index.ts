@@ -1,7 +1,6 @@
 import ls from 'local-storage';
 import { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
-import { useInjectSaga, useInjectReducer } from 'utils/redux-injectors';
 import { spotifyAuthSaga, getTokenExpiryFromLocalStorage } from './saga';
 import { SpotifyAuthState } from './types';
 
@@ -35,19 +34,11 @@ const slice = createSlice({
 export const { actions: spotifyAuthActions } = slice;
 
 export const useSpotifyAuthSlice = () => {
-  useInjectReducer({ key: slice.name, reducer: slice.reducer });
-  useInjectSaga({ key: slice.name, saga: spotifyAuthSaga });
-  return { actions: slice.actions };
+  return {
+    actions: slice.actions,
+    reducer: slice.reducer,
+    saga: spotifyAuthSaga,
+  };
 };
 
-/**
- * Example Usage:
- *
- * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useSpotifyAuthSlice();
- *
- *  const onButtonClick = (evt) => {
- *    dispatch(actions.someAction());
- *   };
- * }
- */
+export default slice;

@@ -1,6 +1,5 @@
-import { PayloadAction, createEntityAdapter } from '@reduxjs/toolkit';
+import { createEntityAdapter } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
-import { useInjectReducer, useInjectSaga } from 'utils/redux-injectors';
 import { searchResultsSaga } from './saga';
 import { SearchResult, SearchResultsState } from './types';
 
@@ -19,19 +18,11 @@ const slice = createSlice({
 export const { actions: searchResultsActions } = slice;
 
 export const useSearchResultsSlice = () => {
-  useInjectReducer({ key: slice.name, reducer: slice.reducer });
-  useInjectSaga({ key: slice.name, saga: searchResultsSaga });
-  return { actions: slice.actions };
+  return {
+    actions: slice.actions,
+    reducer: slice.reducer,
+    saga: searchResultsSaga,
+  };
 };
 
-/**
- * Example Usage:
- *
- * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useSearchResultsSlice();
- *
- *  const onButtonClick = (evt) => {
- *    dispatch(actions.someAction());
- *   };
- * }
- */
+export default slice;

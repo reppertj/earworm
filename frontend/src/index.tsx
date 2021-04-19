@@ -20,7 +20,7 @@ import { App } from 'app';
 
 import { HelmetProvider } from 'react-helmet-async';
 
-import { configureAppStore } from 'store/configureStore';
+import { configureAppStore, rootSaga } from 'store/configureStore';
 
 import reportWebVitals from 'reportWebVitals';
 
@@ -34,6 +34,7 @@ console.log(gaId);
 const ga4react = new GA4React(gaId ?? '');
 
 const store = configureAppStore();
+store.runSaga(rootSaga);
 const MOUNT_NODE = document.getElementById('root') as HTMLElement;
 
 (async () => {

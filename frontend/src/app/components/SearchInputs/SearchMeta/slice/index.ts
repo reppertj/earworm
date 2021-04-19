@@ -1,6 +1,5 @@
-import { PayloadAction, createEntityAdapter } from '@reduxjs/toolkit';
+import { createEntityAdapter } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
-import { useInjectReducer, useInjectSaga } from 'utils/redux-injectors';
 import { embeddingsSaga } from './saga';
 import { EmbeddingsState, MultipleEmbeddings } from './types';
 
@@ -21,19 +20,11 @@ const slice = createSlice({
 export const { actions: embeddingsActions } = slice;
 
 export const useEmbeddingsSlice = () => {
-  useInjectReducer({ key: slice.name, reducer: slice.reducer });
-  useInjectSaga({ key: slice.name, saga: embeddingsSaga });
-  return { actions: slice.actions };
+  return {
+    actions: slice.actions,
+    reducer: slice.reducer,
+    saga: embeddingsSaga,
+  };
 };
 
-/**
- * Example Usage:
- *
- * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useEmbeddingsSlice();
- *
- *  const onButtonClick = (evt) => {
- *    dispatch(actions.someAction());
- *   };
- * }
- */
+export default slice;

@@ -35,8 +35,8 @@ export const VolumeControl = memo(() => {
     <div className={classes.root}>
       <Grid container spacing={2}>
         <Grid item>
-          <Box pt={1.3} m={0}>
-            <VolumeDown fontSize="small" />
+          <Box pt={0.5} m={0}>
+            <VolumeDown color="action" fontSize="small" />
           </Box>
         </Grid>
         <Grid item xs>
@@ -51,8 +51,8 @@ export const VolumeControl = memo(() => {
           />
         </Grid>
         <Grid item>
-          <Box pt={1.3}>
-            <VolumeUp fontSize="small" />
+          <Box pt={0.5} m={0}>
+            <VolumeUp color="action" fontSize="small" />
           </Box>
         </Grid>
       </Grid>

@@ -146,10 +146,6 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, sourceId]);
 
-  // useEffect(() => {
-  //   playing ? wavesurfer.current?.play() : wavesurfer.current?.pause();
-  // }, [playing]);
-
   // Initial Volume
   wavesurfer.current?.on('ready', function () {
     if (wavesurfer.current) {

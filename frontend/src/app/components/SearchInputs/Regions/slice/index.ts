@@ -1,6 +1,5 @@
 import { PayloadAction, createEntityAdapter } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
-import { useInjectReducer } from 'utils/redux-injectors';
 import { Region, RegionsState } from './types';
 
 import { audioSourcesActions } from '../../AudioInputs/slice';
@@ -55,18 +54,7 @@ const slice = createSlice({
 export const { actions: regionsActions } = slice;
 
 export const useRegionsSlice = () => {
-  useInjectReducer({ key: slice.name, reducer: slice.reducer });
-  return { actions: slice.actions };
+  return { actions: slice.actions, reducer: slice.reducer };
 };
 
-/**
- * Example Usage:
- *
- * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useRegionsSlice();
- *
- *  const onButtonClick = (evt) => {
- *    dispatch(actions.someAction());
- *   };
- * }
- */
+export default slice;

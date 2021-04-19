@@ -1,7 +1,5 @@
 import { PayloadAction, createEntityAdapter, Update } from '@reduxjs/toolkit';
 import { createSlice } from 'utils/@reduxjs/toolkit';
-import { useInjectReducer, useInjectSaga } from 'utils/redux-injectors';
-import { audioSourcesSaga } from './saga';
 import { AudioSourcesState, Source } from './types';
 
 export const MAX_SOURCES = 3;
@@ -32,19 +30,7 @@ export const slice = createSlice({
 export const { actions: audioSourcesActions } = slice;
 
 export const useAudioSourcesSlice = () => {
-  useInjectReducer({ key: slice.name, reducer: slice.reducer });
-  useInjectSaga({ key: slice.name, saga: audioSourcesSaga });
   return { actions: slice.actions };
 };
 
-/**
- * Example Usage:
- *
- * export function MyComponentNeedingThisSlice() {
- *  const { actions } = useAudioSourcesSlice();
- *
- *  const onButtonClick = (evt) => {
- *    dispatch(actions.someAction());
- *   };
- * }
- */
+export default slice;
