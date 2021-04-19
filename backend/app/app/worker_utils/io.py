@@ -1,9 +1,8 @@
-import logging
 import os
 import warnings
 import shutil
 import tempfile
-from typing import List, Literal, Optional, Union, cast
+from typing import Literal, Optional, Union, cast
 from pydantic import HttpUrl
 import librosa
 import ffmpeg
@@ -74,7 +73,7 @@ def download_media(file_path: str, media_url: str) -> Literal[True]:
     """Downloads media to `file_path`;"""
     sess = requests.Session()
     try:
-        resp = sess.get(media_url, timeout=0.01)
+        resp = sess.get(media_url, timeout=5.0)
         with open(file_path, "wb") as f:
             f.write(resp.content)
         return True

@@ -6,6 +6,7 @@ from celery.signals import worker_process_init, worker_process_shutdown, task_fa
 from fastapi.encoders import jsonable_encoder
 from sentry_sdk import Hub
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app import crud, schemas, utils
 from app.core.celery_app import celery_app
@@ -81,7 +82,7 @@ def import_track_task(track: Dict[str, str]):
         return jsonable_encoder(track_db)
     except Exception as e:
         _logger.error(
-            f"Skipped track {track['title']} because of error",
+            f"Skipped track {track.get('title')} because of error",
             exc_info=e,
         )
     finally:
@@ -96,15 +97,22 @@ def parse_csv_task(csv_content: str) -> List[Dict[str, Any]]:
 @celery_app.task()
 def create_licenses_task(licenses: List[Dict[str, str]]) -> List[Dict[str, str]]:
     db = SessionLocal()
+    objs_in = [
+        schemas.LicenseCreate(name=license["name"], url=license["url"])
+        for license in licenses
+    ]
     try:
         licenses_db = crud.license.create_multi(
             db=db,
-            objs_in=[
-                schemas.LicenseCreate(name=license["name"], url=license["url"])
-                for license in licenses
-            ],
+            objs_in=objs_in,
         )
         return jsonable_encoder(licenses_db)
+    except IntegrityError:
+        db.rollback()
+        licenses_db = [
+            crud.license.create(db=db, obj_in=obj_in, merge=True) for obj_in in objs_in
+        ]
+        return jsonable_encoder((licenses_db))
     finally:
         db.close()
 
