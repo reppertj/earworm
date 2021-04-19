@@ -2,11 +2,13 @@ import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import makeStyles from '@material-ui/core/styles/makeStyles';
 import Typography from '@material-ui/core/Typography';
+import Link from '@material-ui/core/Link';
 
 import AppBar from '../../components/AppBar';
 import MusicSearchForm from '../../components/SearchInputs/SearchMeta/SearchForm';
 import Copyright from '../../components/Copyright';
 import { ErrorSnackBar } from 'app/components/Error/ErrorSnackBar';
+import { LicenseModal } from 'app/components/SearchResults/LicenseModal';
 import { ResultsWindow } from 'app/components/SearchResults/ResultsWindow';
 import { ReactQueryDevtools } from 'react-query/devtools';
 
@@ -40,6 +42,7 @@ export function HomePage() {
         <AppBar />
         <MusicSearchForm />
         <ResultsWindow />
+        <LicenseModal />
         <ErrorSnackBar />
         <ReactQueryDevtools initialIsOpen={false} />
       </main>
@@ -53,7 +56,13 @@ export function HomePage() {
           color="textSecondary"
           component="p"
         >
-          Something here to give the footer a purpose!
+          <Link
+            target="_blank"
+            rel="noopener"
+            href="https://github.com/reppertj/earworm/"
+          >
+            Github
+          </Link>
         </Typography>
         <Copyright />
       </footer>

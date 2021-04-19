@@ -2,13 +2,19 @@ import { EntityState } from '@reduxjs/toolkit';
 /* --- STATE --- */
 
 export interface SearchResult {
-  title: string;
+  title: {
+    name: string;
+    url: string;
+  };
   artist: string;
-  url: string;
-  licenseName: string;
-  licenseUrl: string;
-  providerName: string;
-  providerUrl: string;
+  license: {
+    name: string;
+    url: string;
+  };
+  provider: {
+    name: string;
+    url: string;
+  };
   previewUrl: string | undefined;
   percentMatch: number;
 }

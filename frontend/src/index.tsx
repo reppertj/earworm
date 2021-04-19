@@ -27,19 +27,29 @@ import reportWebVitals from 'reportWebVitals';
 // Initialize languages
 import './locales/i18n';
 
+// GA
+import GA4React from 'ga-4-react';
+const gaId = process.env.REACT_APP_GA_MEASUREMENT_ID;
+console.log(gaId);
+const ga4react = new GA4React(gaId ?? '');
+
 const store = configureAppStore();
 const MOUNT_NODE = document.getElementById('root') as HTMLElement;
 
-ReactDOM.render(
-  <Provider store={store}>
-    <HelmetProvider>
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    </HelmetProvider>
-  </Provider>,
-  MOUNT_NODE,
-);
+(async () => {
+  await ga4react.initialize();
+  console.log(ga4react);
+  ReactDOM.render(
+    <Provider store={store}>
+      <HelmetProvider>
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      </HelmetProvider>
+    </Provider>,
+    MOUNT_NODE,
+  );
+})();
 
 // Hot reloadable translation json files
 if (module.hot) {

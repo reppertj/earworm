@@ -158,6 +158,13 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
     }
   });
 
+  wavesurfer.current?.on('finish', function () {
+    if (wavesurfer.current) {
+      setPlaying(false);
+      wavesurfer.current.stop();
+    }
+  });
+
   // Later Volume
   useEffect(() => {
     wavesurfer.current?.setVolume(volume);

@@ -18,22 +18,22 @@ const useStyles = makeStyles(theme => ({
   },
   title: {
     flexGrow: 1,
-    display: 'none',
-    [theme.breakpoints.up('sm')]: {
-      display: 'block',
-    },
+    // display: 'none',
+    // [theme.breakpoints.up('sm')]: {
+    //   display: 'block',
+    // },
   },
   icon: {
     marginRight: theme.spacing(2),
   },
   volume: {
-    position: 'relative',
-    marginLeft: 0,
-    width: '100%',
-    [theme.breakpoints.up('sm')]: {
-      marginLeft: theme.spacing(1),
-      width: 'auto',
-    },
+    // position: 'relative',
+    // marginLeft: 0,
+    // width: '100%',
+    // [theme.breakpoints.up('sm')]: {
+    //   marginLeft: theme.spacing(1),
+    //   width: 'auto',
+    // },
   },
 }));
 
@@ -44,10 +44,10 @@ const AppBar = memo((props: Props) => {
 
   return (
     <div className={classes.root}>
-      <MuiAppBar position="relative">
-        <Toolbar>
+      <MuiAppBar position="static">
+        <Toolbar variant="dense">
           <LibraryMusicOutlinedIcon className={classes.icon} />
-          <Typography variant="h6" color="inherit" noWrap>
+          <Typography variant="h6" color="inherit" className={classes.title}>
             Earworm
           </Typography>
           <div className={classes.volume}>

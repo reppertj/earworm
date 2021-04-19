@@ -146,7 +146,7 @@ function ResultListItem(props: ResultListItemProps) {
         primary={primaryText}
         secondary={secondaryText}
       ></ListItemText>
-      <ListItemAction>
+      <ListItemAction onClick={handleClick}>
         <AudioButton audioElementRef={audioElementRef} url={item.previewUrl} />
         <div
           className="play-pause-button-wrapper"
@@ -222,7 +222,7 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
       <Dialog
         disableBackdropClick
         disableEscapeKeyDown
-        maxWidth="lg"
+        maxWidth="md"
         open={open}
       >
         <DialogTitle>
@@ -248,7 +248,7 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
           <Button autoFocus onClick={handleCancel} color="primary">
             Cancel
           </Button>
-          <Button onClick={handleOk} color="primary">
+          <Button onClick={handleOk} color="primary" autoFocus>
             Ok
           </Button>
         </DialogActions>

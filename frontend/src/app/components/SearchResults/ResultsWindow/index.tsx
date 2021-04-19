@@ -17,12 +17,13 @@ import { useErrorSlice } from 'app/components/Error/slice';
 import { useSearchResultsSlice } from '../slice';
 import { nanoid } from '@reduxjs/toolkit';
 import { ResultsDataTable } from '../ResultsDataTable';
+import Paper from '@material-ui/core/Paper';
+import Container from '@material-ui/core/Container';
 
 interface Props {}
 
 export function ResultsWindow(props: Props) {
   const [page, setPage] = useState(0);
-  const [results, setResults] = useState<any>(undefined);
   const numEmbeddings = useSelector(selectNumEmbeddings);
   const allEmbeddings = useSelector(selectAllEmbeddings);
   const dispatch = useDispatch();
@@ -51,13 +52,19 @@ export function ResultsWindow(props: Props) {
   } else if (!isLoading && data) {
     const flattened = data.data.map(result => ({
       id: nanoid(),
-      title: result.title,
+      title: {
+        name: result.title,
+        url: result.url,
+      },
       artist: result.artist,
-      url: result.url,
-      licenseName: result.license.name,
-      licenseUrl: result.license.url,
-      providerName: result.provider.name,
-      providerUrl: result.provider.url,
+      license: {
+        name: result.license.name,
+        url: result.license.url,
+      },
+      provider: {
+        name: result.provider.name,
+        url: result.provider.url,
+      },
       previewUrl: result.temp_preview_url,
       percentMatch: result.percent_match,
     }));
@@ -67,11 +74,11 @@ export function ResultsWindow(props: Props) {
 
   return (
     <div>
-      {isLoading ? (
-        'Loading...'
-      ) : (
-        <ResultsDataTable isLoading={isLoading} isSuccess={isSuccess} />
-      )}
+      <Container>
+        <Paper>
+          <ResultsDataTable isLoading={isLoading} isSuccess={isSuccess} />
+        </Paper>
+      </Container>
     </div>
   );
 }

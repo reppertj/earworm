@@ -24,6 +24,7 @@ import { NotFoundPage } from './components/NotFoundPage/Loadable';
 import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from 'styles/global-styles';
+import { useGA4React } from 'ga-4-react';
 
 const theme = createMuiTheme({
   palette: {
@@ -31,7 +32,7 @@ const theme = createMuiTheme({
       main: '#8daa91',
     },
     secondary: {
-      main: '#424b54',
+      main: '#92140c',
     },
   },
 });
@@ -39,6 +40,13 @@ const theme = createMuiTheme({
 const queryClient = new QueryClient();
 
 export function App() {
+  const gaId = process.env.REACT_APP_GA_MEASUREMENT_ID;
+  try {
+    const ga = useGA4React(gaId);
+    console.log(ga);
+  } catch (e) {
+    console.log(e);
+  }
   const { i18n } = useTranslation();
   return (
     <>

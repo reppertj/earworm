@@ -17,6 +17,7 @@ export const AudioButton = (props: Props) => {
       ref={props.audioElementRef}
       src={props.url}
       crossOrigin={'anonymous'}
+      preload="none"
     ></audio>
   );
 };

@@ -174,7 +174,7 @@ function UploadWindow(props: UploadWindowProps) {
           <input {...getInputProps()} />
           <Grid container direction="column" spacing={3}>
             <Grid item>
-              {!numSources && (
+              {!numSources ? (
                 <Box pt={3}>
                   <Typography align="center" variant="h4" color="textPrimary">
                     Search for royalty-free music by sonic similarity.
@@ -194,8 +194,7 @@ function UploadWindow(props: UploadWindowProps) {
                     </Typography>
                   </Container>
                 </Box>
-              )}
-              {numSources && (
+              ) : (
                 <Box pt={3}>
                   <Container maxWidth="md">
                     <Typography
@@ -387,6 +386,7 @@ function SearchWindow(props) {
                 variant="contained"
                 size="large"
                 disabled={searching}
+                autoFocus
                 onClick={handleSearchClick}
               >
                 {searching ? searchProgressLabel : 'Analyze and Search'}

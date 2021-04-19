@@ -8,6 +8,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { makeStyles } from '@material-ui/core/styles';
 import Slider from '@material-ui/core/Slider';
 import Grid from '@material-ui/core/Grid';
+import Box from '@material-ui/core/Box';
 import VolumeDown from '@material-ui/icons/VolumeDown';
 import VolumeUp from '@material-ui/icons/VolumeUp';
 import { useVolumeSlice } from '../volumeSlice';
@@ -34,7 +35,9 @@ export const VolumeControl = memo(() => {
     <div className={classes.root}>
       <Grid container spacing={2}>
         <Grid item>
-          <VolumeDown fontSize="small" />
+          <Box pt={1.3} m={0}>
+            <VolumeDown fontSize="small" />
+          </Box>
         </Grid>
         <Grid item xs>
           <Slider
@@ -48,7 +51,9 @@ export const VolumeControl = memo(() => {
           />
         </Grid>
         <Grid item>
-          <VolumeUp fontSize="small" />
+          <Box pt={1.3}>
+            <VolumeUp fontSize="small" />
+          </Box>
         </Grid>
       </Grid>
     </div>
