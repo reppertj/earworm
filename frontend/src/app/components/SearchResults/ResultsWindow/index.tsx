@@ -5,13 +5,13 @@
  */
 import React, { useState } from 'react';
 import { useQuery } from 'react-query';
-import { postEmbeddingsSearch, cancelTokenSource } from '../../../utils/api';
+import { postEmbeddingsSearch } from '../../../utils/api';
 
 import {
   selectAllEmbeddings,
   selectNumEmbeddings,
 } from 'app/components/SearchInputs/SearchMeta/slice/selectors';
-import { Provider, useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useEmbeddingsSlice } from 'app/components/SearchInputs/SearchMeta/slice';
 import { useErrorSlice } from 'app/components/Error/slice';
 import { useSearchResultsSlice } from '../slice';
@@ -24,14 +24,11 @@ interface Props {}
 
 export function ResultsWindow(props: Props) {
   const [page, setPage] = useState(0);
-  const numEmbeddings = useSelector(selectNumEmbeddings);
   const allEmbeddings = useSelector(selectAllEmbeddings);
   const dispatch = useDispatch();
   const { actions: errorActions } = useErrorSlice();
   const { actions: resultsActions } = useSearchResultsSlice();
   const { actions: embeddingActions } = useEmbeddingsSlice();
-
-  const doSearch = numEmbeddings > 0;
 
   const toSearch = allEmbeddings[allEmbeddings.length - 1];
   console.log('searching with', toSearch);
@@ -49,6 +46,13 @@ export function ResultsWindow(props: Props) {
   if (isError) {
     // TODO: error handling on response from query
     console.log(error);
+    dispatch(
+      errorActions.errorAdded({
+        id: nanoid(),
+        error: true,
+        message: 'Error communicating with the server.',
+      }),
+    );
   } else if (!isLoading && data) {
     const flattened = data.data.map(result => ({
       id: nanoid(),

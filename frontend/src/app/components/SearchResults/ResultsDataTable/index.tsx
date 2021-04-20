@@ -9,11 +9,24 @@ import {
   selectAllSearchResults,
   selectSearchResultsIds,
 } from '../slice/selectors';
-import { DataGrid, GridColDef } from '@material-ui/data-grid';
+import {
+  DataGrid,
+  GridColDef,
+  GridToolbarContainer,
+} from '@material-ui/data-grid';
 import Link from '@material-ui/core/Link';
 import LinkIcon from '@material-ui/icons/Link';
 import Box from '@material-ui/core/Box';
+import { ShareButton } from '../ShareButton';
 import { ResultPlaybackCell } from '../ResultPlaybackCell';
+
+function ShareToolbar() {
+  return (
+    <GridToolbarContainer>
+      <ShareButton />
+    </GridToolbarContainer>
+  );
+}
 
 interface Props {
   isLoading: boolean;
@@ -30,12 +43,20 @@ export function ResultsDataTable(props: Props) {
   const searchResultsIds = useSelector(selectSearchResultsIds);
 
   const columns: GridColDef[] = [
-    { field: 'percentMatch', headerName: '% Match', width: 120 },
+    {
+      field: 'percentMatch',
+      headerName: '% Match',
+      disableColumnMenu: true,
+      filterable: false,
+      width: 130,
+    },
     {
       field: 'previewUrl',
       headerName: 'Preview',
       width: 50,
       sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
       renderHeader: () => <div> </div>,
       renderCell: params => (
         <Box padding={0} margin={0}>
@@ -50,18 +71,19 @@ export function ResultsDataTable(props: Props) {
     {
       field: 'title',
       headerName: 'Title',
-      width: 230,
+      flex: 6,
+      valueGetter: params => params.row.title.name,
       sortComparator: (v1, v2, param1, param2) =>
-        (param1.value as any).name.localeCompare((param2.value as any).name),
+        (param1.value as string).localeCompare(param2.value as string),
       renderCell: params =>
         params.value ? (
           <Link
             target="_blank"
             rel="noopener"
             color="secondary"
-            href={(params.value as any).url}
+            href={params.row.title.url}
           >
-            {(params.value as any).name} {<LinkIcon fontSize="small" />}
+            {params.getValue('title')} {<LinkIcon fontSize="small" />}
           </Link>
         ) : (
           <></>
@@ -70,33 +92,38 @@ export function ResultsDataTable(props: Props) {
     { field: 'artist', headerName: 'Artist', width: 150 },
     {
       field: 'provider',
-      headerName: 'Website',
-      width: 150,
+      headerName: 'Source',
+      flex: 4,
+      valueGetter: params => params.row.provider.name,
       sortComparator: (v1, v2, param1, param2) =>
-        (param1.value as any).name.localeCompare((param2.value as any).name),
-      renderCell: params =>
-        params.value ? (
-          <Link target="_blank" rel="noopener" href={(params.value as any).url}>
-            {(params.value as any).name}
+        (param1.value as string).localeCompare(param2.value as string),
+      renderCell: params => {
+        return params.value ? (
+          <Link target="_blank" rel="noopener" href={params.row.provider.url}>
+            {params.getValue('provider')}
           </Link>
         ) : (
           <></>
-        ),
+        );
+      },
     },
     {
       field: 'license',
       headerName: 'License',
-      width: 150,
+      flex: 3,
+      valueGetter: params => params.row.license.name,
       sortComparator: (v1, v2, param1, param2) =>
-        (param1.value as any).name.localeCompare((param2.value as any).name),
-      renderCell: params =>
-        params.value ? (
-          <Link target="_blank" rel="noopener" href={(params.value as any).url}>
-            {(params.value as any).name}
+        (param1.value as string).localeCompare(param2.value as string),
+      renderCell: params => {
+        console.log(params);
+        return params.value ? (
+          <Link target="_blank" rel="noopener" href={params.row.license.url}>
+            {params.getValue('license')}
           </Link>
         ) : (
           <></>
-        ),
+        );
+      },
     },
   ];
 
@@ -109,19 +136,21 @@ export function ResultsDataTable(props: Props) {
     <>
       {searchResults.length > 0 && (
         <>
-          <div style={{ display: 'flex', height: 800, width: '100%' }}>
+          <div style={{ display: 'flex', width: '100%' }}>
             <div style={{ flexGrow: 1 }}>
               <DataGrid
+                autoHeight
+                pagination
+                pageSize={25}
+                rowsPerPageOptions={[]}
+                components={{ Toolbar: ShareToolbar }}
                 rows={rows}
                 columns={columns}
                 loading={isLoading}
-                hideFooterPagination={true}
                 sortModel={[{ field: 'percentMatch', sort: 'desc' }]}
               />
             </div>
           </div>
-          {/* <div style={{ height: 800, width: '100%' }}>
-        </div> */}
         </>
       )}
     </>

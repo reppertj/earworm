@@ -43,8 +43,8 @@ export default function RegionPreferences(props: RegionPreferencesProps) {
     checked: {
       color: color,
     },
-    root: { paddingTop: '0.05em', paddingBottom: '0.05em' },
-    formLabel: { paddingLeft: '0.2em', paddingTop: '0.2em' },
+    root: { paddingTop: '0.05em', paddingBottom: '0.1em' },
+    formLabel: { paddingLeft: '0.2em', paddingTop: '0.5em' },
     label: { fontSize: 'small' },
   }));
 

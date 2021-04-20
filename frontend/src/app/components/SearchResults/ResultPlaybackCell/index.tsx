@@ -73,14 +73,6 @@ export const ResultPlaybackCell = (props: Props) => {
     }
   }, [pauseEvent, playEvent, currentlyPlayingRef]);
 
-  // useEffect(() => {
-  //   if (audioElementRef.current && isPlaying) {
-  //     playEvent();
-  //   } else if (audioElementRef.current && !isPlaying) {
-  //     pauseEvent();
-  //   }
-  // }, [audioElementRef, isPlaying, isLoaded, playEvent]);
-
   return (
     <div>
       <AudioButton audioElementRef={audioElementRef} url={url} />

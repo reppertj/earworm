@@ -61,19 +61,27 @@ function UploadSurferGroup() {
             );
           })}
         </Grid>
-        <Grid container justify="space-around" item direction="row" spacing={1}>
-          {regions.map(region => {
-            return (
-              <div key={region.id}>
-                <Grid item>
-                  <Paper>
-                    <RegionPreferences regionId={region.id} />
-                  </Paper>
-                </Grid>
-              </div>
-            );
-          })}
-        </Grid>
+        <Box display="flex" justifyContent="center" padding={2}>
+          <Paper>
+            <Grid
+              container
+              justify="center"
+              align-items="center"
+              item
+              direction="row"
+            >
+              {regions.map(region => {
+                return (
+                  <div key={region.id}>
+                    <Grid item>
+                      <RegionPreferences regionId={region.id} />
+                    </Grid>
+                  </div>
+                );
+              })}
+            </Grid>
+          </Paper>
+        </Box>
       </Grid>
     </>
   );
