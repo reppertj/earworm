@@ -168,6 +168,12 @@ services:
     image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
     build:
       context: ./frontend
+      args:
+        GENERATE_SOURCEMAP: ${GENERATE_SOURCEMAP-false}
+        REACT_APP_SPOTIFY_CLIENT_ID: ${REACT_APP_SPOTIFY_CLIENT_ID?Variable not set}
+        REACT_APP_REDIRECT_URL: ${REACT_APP_REDIRECT_URL?Variable not set}
+        REACT_APP_GA_MEASUREMENT_ID: ${REACT_APP_GA_MEASUREMENT_ID?Variable not set}
+
     deploy:
       labels:
         - traefik.enable=true
