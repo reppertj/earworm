@@ -3,6 +3,10 @@
 # Exit in case of error
 set -e
 
+docker pull $DOCKER_IMAGE_BACKEND:$TAG
+docker pull $DOCKER_IMAGE_CELERYWORKER:$TAG
+docker pull $DOCKER_IMAGE_FRONTEND:$TAG
+
 DOMAIN=${DOMAIN?Variable not set} \
 TRAEFIK_TAG=${TRAEFIK_TAG?Variable not set} \
 STACK_NAME=${STACK_NAME?Variable not set} \

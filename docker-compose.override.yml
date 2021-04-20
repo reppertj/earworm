@@ -84,8 +84,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        FRONTEND_ENV: dev
     stdin_open: true
     volumes:
       - './frontend:/app:cached'

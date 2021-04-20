@@ -1,16 +1,26 @@
-FROM node:12
+# When running in development, run npm start outside the container and use the react-scripts
+# proxy to reach the backend. (https://create-react-app.dev/docs/proxying-api-requests-in-development/)
+# This builds a production image using nginx to serve the production-optimized build 
+FROM node:12 AS build-stage
 
-ADD package.json /package.json
+WORKDIR /app
+
+COPY ./nginx.conf /nginx.conf
+
+COPY package.json /app/
 
 ENV NODE_PATH=/node_modules
 ENV PATH=$PATH:/node_modules/.bin
-RUN npm install
 
-WORKDIR /app
-ADD . /app
+RUN yarn install
 
-EXPOSE 8000
-EXPOSE 35729
+COPY ./ /app/
 
-ENTRYPOINT ["/bin/bash", "/app/run.sh"]
-CMD ["start"]
+RUN yarn build
+
+FROM nginx:1.18
+
+COPY --from=build-stage /app/build/ /usr/share/nginx/html
+COPY --from=build-stage /nginx.conf /etc/nginx/conf.d/default.conf
+
+COPY ./nginx-backend-not-found.conf /etc/nginx/extra-conf.d/backend-not-found.conf
