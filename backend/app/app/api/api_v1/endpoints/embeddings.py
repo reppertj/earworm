@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse
 from app.api import deps
 from app import crud, schemas, worker, utils
 from app.schemas.track import TrackKNNResult
-from app.worker_utils.knn import get_knn
+from app.worker_utils.knn import get_knn, reset_knn
 from app.core import object_store
 from celery import group
 from celery.result import AsyncResult
@@ -44,3 +44,14 @@ def knn_tracks(
             key=db_tracks[idx].s3_preview_key
         )
     return tracks_out
+
+@r.get(
+    "/reset",
+    response_model=str,
+    dependencies=[Depends(deps.get_current_active_superuser)]
+)
+def reset_knn_index(db=Depends(deps.get_db)):
+    """Reset the in-memory knn index on the server with the latest DB data"""
+    reset_knn(db)
+    knn = get_knn(db)
+    return f"Reset successful; the index currently has {knn.num_embeddings} tracks."
