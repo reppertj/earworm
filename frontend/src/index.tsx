@@ -36,8 +36,12 @@ store.runSaga(rootSaga);
 const MOUNT_NODE = document.getElementById('root') as HTMLElement;
 
 (async () => {
-  await ga4react.initialize();
-  console.log(ga4react);
+  try {
+    await ga4react.initialize();
+    console.log(ga4react);
+  } catch (e) {
+    console.log(e);
+  }
   ReactDOM.render(
     <Provider store={store}>
       <React.StrictMode>

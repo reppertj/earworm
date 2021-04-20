@@ -7,10 +7,7 @@ import React, { useState } from 'react';
 import { useQuery } from 'react-query';
 import { postEmbeddingsSearch } from '../../../utils/api';
 
-import {
-  selectAllEmbeddings,
-  selectNumEmbeddings,
-} from 'app/components/SearchInputs/SearchMeta/slice/selectors';
+import { selectAllEmbeddings } from 'app/components/SearchInputs/SearchMeta/slice/selectors';
 import { useDispatch, useSelector } from 'react-redux';
 import { useEmbeddingsSlice } from 'app/components/SearchInputs/SearchMeta/slice';
 import { useErrorSlice } from 'app/components/Error/slice';
