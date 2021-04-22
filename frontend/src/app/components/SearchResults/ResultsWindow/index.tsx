@@ -16,6 +16,10 @@ import { nanoid } from '@reduxjs/toolkit';
 import { ResultsDataTable } from '../ResultsDataTable';
 import Paper from '@material-ui/core/Paper';
 import Container from '@material-ui/core/Container';
+import Grid from '@material-ui/core/Grid';
+import Box from '@material-ui/core/Box';
+import CircularProgress from '@material-ui/core/CircularProgress';
+import Typography from '@material-ui/core/Typography';
 
 interface Props {}
 
@@ -28,20 +32,18 @@ export function ResultsWindow(props: Props) {
   const { actions: embeddingActions } = useEmbeddingsSlice();
 
   const toSearch = allEmbeddings[allEmbeddings.length - 1];
-  console.log('searching with', toSearch);
 
   const embeddings = toSearch?.embeddings;
 
-  const { isLoading, isError, isSuccess, data, error } = useQuery(
+  const { isLoading, isError, data, error } = useQuery(
     ['embeddingsSearch', embeddings, page],
     postEmbeddingsSearch,
     {
       enabled: !!embeddings,
-      staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 60 * 15,
     },
   );
   if (isError) {
-    // TODO: error handling on response from query
     console.log(error);
     dispatch(
       errorActions.errorAdded({
@@ -50,6 +52,7 @@ export function ResultsWindow(props: Props) {
         message: 'Error communicating with the server.',
       }),
     );
+    dispatch(resultsActions.searchResultsAllRemoved());
   } else if (!isLoading && data) {
     const flattened = data.data.map(result => ({
       id: nanoid(),
@@ -73,13 +76,28 @@ export function ResultsWindow(props: Props) {
   }
   dispatch(embeddingActions.embeddingsAllRemoved);
 
-  return (
-    <div>
-      <Container>
-        <Paper>
-          <ResultsDataTable isLoading={isLoading} isSuccess={isSuccess} />
-        </Paper>
-      </Container>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <Grid container direction="column" alignItems="center" justify="center">
+        <Grid item>
+          <Typography>Waiting for matching results</Typography>
+        </Grid>
+        <Box pt={2} pb={20}>
+          <Grid item>
+            <CircularProgress size={40} />
+          </Grid>
+        </Box>
+      </Grid>
+    );
+  } else {
+    return (
+      <div>
+        <Container>
+          <Paper>
+            <ResultsDataTable />
+          </Paper>
+        </Container>
+      </div>
+    );
+  }
 }

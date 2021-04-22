@@ -34,8 +34,6 @@ export function SpotifyAuthorizationButton(props: Props) {
   const theme = useTheme();
   const dispatch = useDispatch();
   const { actions } = useSpotifyAuthSlice();
-  // const { }
-  console.log(ls);
   useEffect(() => {
     const params = getHashParams();
     const token = params.access_token;

@@ -68,7 +68,9 @@ export default async function getChannelDataAndSampleRate(
   const audioArray: Array<Float32Array> = [];
   await offlineCtx.startRendering().then(offlineBuffer => {
     for (var channel = 0; channel < offlineBuffer.numberOfChannels; channel++) {
-      audioArray[channel] = offlineBuffer.getChannelData(channel);
+      audioArray[channel] = Float32Array.from(
+        offlineBuffer.getChannelData(channel),
+      );
     }
   });
   const channelData = Object.freeze(audioArray);

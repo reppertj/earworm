@@ -11,8 +11,6 @@ const backendAxios = axios.create({
 
 export const postEmbeddingsSearch = ({ queryKey }) => {
   const [_key, embeddings, page] = queryKey;
-  console.log('embed', embeddings);
-  console.log('page', page);
   const data = {
     k: (page + 1) * 50,
     embeddings,
