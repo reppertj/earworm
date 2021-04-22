@@ -4,7 +4,6 @@ from pydantic import BaseModel, HttpUrl
 
 from .license import License
 from .provider import Provider
-from .embedding import Embedding
 from .upload import UploadStatusBase
 
 
@@ -63,4 +62,4 @@ class TrackUploadStatus(UploadStatusBase):
 
 # Additional properties stored in DB
 class TrackInDB(TrackInDBBase):
-    pass
+    active: bool

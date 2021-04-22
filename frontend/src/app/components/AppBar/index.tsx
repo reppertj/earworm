@@ -43,8 +43,8 @@ const AppBar = memo((props: Props) => {
   const classes = useStyles();
 
   return (
-    <div className={classes.root}>
-      <MuiAppBar position="static">
+    <MuiAppBar position="sticky">
+      <div className={classes.root}>
         <Toolbar variant="dense">
           <LibraryMusicOutlinedIcon className={classes.icon} />
           <Typography variant="h6" color="inherit" className={classes.title}>
@@ -54,8 +54,8 @@ const AppBar = memo((props: Props) => {
             <VolumeControl />
           </div>
         </Toolbar>
-      </MuiAppBar>
-    </div>
+      </div>
+    </MuiAppBar>
   );
 });
 

@@ -11,7 +11,7 @@ from app.schemas.track import TrackCreate, TrackUpdate
 
 
 class CRUDTrack(CRUDBase[Track, TrackCreate, TrackUpdate]):
-    def create(self, db: Session, *, obj_in: TrackCreate) -> Track:
+    def create(self, db: Session, *, obj_in: TrackCreate) -> Track:  # type: ignore
         obj_in_data = jsonable_encoder(obj_in)
         db_license = obj_in_data.get("license") or license.get_by_name(
             db, name=obj_in.license_name
@@ -25,6 +25,7 @@ class CRUDTrack(CRUDBase[Track, TrackCreate, TrackUpdate]):
             s3_preview_key=obj_in.s3_preview_key,
             url=obj_in.url,
             media_url=obj_in.media_url,
+            active=True,
             license_id=db_license.id,
             provider_id=db_provider.id,
         )  # type: ignore
@@ -97,6 +98,6 @@ class CRUDTrack(CRUDBase[Track, TrackCreate, TrackUpdate]):
             .limit(limit)
             .all()
         )
-
+    
 
 track = CRUDTrack(Track)

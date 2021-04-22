@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, ForeignKey, Integer, String, UnicodeText
+from sqlalchemy import Column, ForeignKey, Integer, String, UnicodeText, Boolean
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base
@@ -18,6 +18,7 @@ class Track(Base):
     s3_preview_key = Column(String)
     url = Column(String, nullable=False)
     media_url = Column(String)
+    active = Column(Boolean)
     license_id = Column(Integer, ForeignKey("license.id"))
     license = relationship("License", uselist=False, back_populates="tracks")
     provider_id = Column(Integer, ForeignKey("provider.id"))

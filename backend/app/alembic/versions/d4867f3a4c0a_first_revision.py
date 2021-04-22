@@ -5,7 +5,7 @@ Revises:
 Create Date: 2019-04-17 13:53:32.978401
 
 """
-from sqlalchemy.sql.schema import ForeignKeyConstraint
+from sqlalchemy.sql.schema import ForeignKeyConstraint, UniqueConstraint
 from alembic import op
 import sqlalchemy as sa
 
@@ -55,6 +55,7 @@ def upgrade():
         sa.Column("s3_preview_key", sa.String(512)),
         sa.Column("url", sa.String(1024), nullable=False),
         sa.Column("media_url", sa.String(1024)),
+        sa.Column("active", sa.Boolean),
         sa.Column("license_id", sa.Integer),
         sa.Column("provider_id", sa.Integer),
         sa.ForeignKeyConstraint(["license_id"], ["license.id"]),
@@ -69,6 +70,7 @@ def upgrade():
         sa.Column("id", sa.Integer, primary_key=True),
         sa.Column("name", sa.String(200), nullable=False, unique=True),
     )
+    op.create_index(op.f("ix_track_active"), "track", ["active"], unique=False)
     op.create_index(op.f("ix_embedding_model_id"), "track", ["id"], unique=False)
     op.create_table(
         "embedding",
@@ -81,19 +83,48 @@ def upgrade():
         sa.UniqueConstraint("track_id", "embedding_model_id", name="unique_embedding"),
     )
     op.create_index(
-        op.f("ix_embedding_embedding_model_id"), "embedding", ["embedding_model_id"], unique=False
+        op.f("ix_embedding_embedding_model_id"),
+        "embedding",
+        ["embedding_model_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_embedding_track_id"), "embedding", ["track_id"], unique=True
     )
+    op.create_table(
+        "share_phrase",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("phrase", sa.String, unique=True, nullable=False),
+    )
+    op.create_index(
+        op.f("ix_share_phrase"), "share_phrase", ["phrase"], unique=True
+    )
+    op.create_table(
+        "share_phrase_track",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("share_phrase_id", sa.Integer, nullable=False),
+        sa.Column("track_id", sa.Integer, nullable=False),
+        sa.Column("percent_match", sa.Float),
+        sa.ForeignKeyConstraint(["share_phrase_id"], ["share_phrase.id"]),
+        sa.ForeignKeyConstraint(["track_id"], ["track.id"]),
+    )
+    op.create_index(
+        op.f("ix_share_phrase_track_link_id"), "share_phrase_track", ["share_phrase_id"]
+    )
+
 
 def downgrade():
+    op.drop_index(op.f("ix_share_phrase_track_link_id"), table_name="share_phrase_track")
+    op.drop_table("share_phrase_track")
+    op.drop_index(op.f("ix_share_phrase"), table_name="share_phrase")
+    op.drop_table("share_phrase")
     op.drop_index(op.f("ix_license_id"), table_name="license")
     op.drop_index(op.f("ix_license_name"), table_name="license")
     op.drop_table("license")
     op.drop_index(op.f("ix_provider_id"), table_name="provider")
     op.drop_index(op.f("ix_provider_name"), table_name="provider")
     op.drop_table("provider")
+    op.drop_index(op.f("ix_track_active"), table_name="track")
     op.drop_index(op.f("ix_track_id"), table_name="track")
     op.drop_table("track")
     op.drop_index(op.f("ix_embedding_model_id"), table_name="embedding_model")

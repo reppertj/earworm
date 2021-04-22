@@ -4,8 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from app.crud.base import CRUDBase
-from app.models.embedding import Embedding
-from app.models.embedding_model import Embedding_Model
+from app.models import Track, Embedding, Embedding_Model
 from app.schemas.embedding import (
     EmbeddingCreate,
     EmbeddingUpdate,
@@ -13,7 +12,7 @@ from app.schemas.embedding import (
 
 
 class EmbeddingBase(CRUDBase[Embedding, EmbeddingCreate, EmbeddingUpdate]):
-    def create(self, db: Session, *, obj_in: EmbeddingCreate):
+    def create(self, db: Session, *, obj_in: EmbeddingCreate):  # type: ignore
         obj_in_data = jsonable_encoder(obj_in)
         db_embedding_model = (
             db.query(Embedding_Model).filter_by(name=obj_in_data["model_name"]).first()
@@ -50,13 +49,15 @@ class EmbeddingBase(CRUDBase[Embedding, EmbeddingCreate, EmbeddingUpdate]):
         db.refresh(db_obj)
         return db_obj
 
-    def get_embeddings_by_embedding_model_name(
+    def get_active_embeddings_by_embedding_model_name(
         self, db: Session, *, embed_model_name: str
     ) -> List[Embedding]:
         subq = db.query(Embedding_Model).filter_by(name=embed_model_name).subquery()
+        subq2 = db.query(Track).filter_by(active=True).subquery()
         return (
             db.query(Embedding)
             .join(subq, Embedding.embedding_model_id == subq.c.id)
+            .join(subq2, Embedding.track_id == subq2.c.id)
             .all()
         )
 

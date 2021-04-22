@@ -157,7 +157,6 @@ function UploadWindow(props: UploadWindowProps) {
             message: 'Encountered a problem loading files. Sorry about that.',
           }),
         );
-        console.log(e);
       }
     },
     accept: 'audio/*',
@@ -285,6 +284,7 @@ function SearchWindow(props) {
           seconds: number;
           preference: number;
         }
+        var hadError = false;
         const inferenceRegions: InferenceRegion[] = [];
         if (numRegions === 0) {
           const samplesPerSource = Math.floor(regionsAvailable / numSources);
@@ -337,20 +337,22 @@ function SearchWindow(props) {
               }),
             );
             console.log('Error during inference', e);
+            hadError = true;
             break;
           }
         }
-        console.log(embeddings);
-        resolve(embeddings);
         clearTimeout(showSearchingTimout);
         setSearching(false);
         setSearchProgressLabel(undefined);
-        dispatch(
-          embeddingsActions.embeddingsAdded({
-            id: nanoid(),
-            embeddings,
-          }),
-        );
+        resolve(embeddings);
+        if (!hadError) {
+          dispatch(
+            embeddingsActions.embeddingsAdded({
+              id: nanoid(),
+              embeddings,
+            }),
+          );
+        }
       });
     },
     [

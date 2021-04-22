@@ -2,7 +2,6 @@ import numpy as np
 from typing import List, Optional, Tuple, Union
 from app import crud
 from app.core.config import settings
-from app.api.deps import SessionLocal
 from app.worker_utils.metrics import spherical_mean
 import faiss
 
@@ -11,19 +10,26 @@ import logging
 
 class KNN:
     def __init__(self, db):
-        embeddings = crud.embedding.get_embeddings_by_embedding_model_name(
+        embeddings = crud.embedding.get_active_embeddings_by_embedding_model_name(
             db, embed_model_name=settings.ACTIVE_MODEL_NAME
         )
 
-        EMBEDDING_DIM = 128
-        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(EMBEDDING_DIM))
-        self.index.add_with_ids(
-            x=np.array(
-                [embedding.values for embedding in embeddings], dtype=np.float32
-            ), ids=np.array([embedding.track_id for embedding in embeddings], dtype=np.int64)
-        )
-        self.num_embeddings = self.index.ntotal
-        logging.info(f"The KNN Index contains {self.index.ntotal} vectors")
+        if len(embeddings) > 0:
+            EMBEDDING_DIM = 128
+            self.index = faiss.IndexIDMap(faiss.IndexFlatIP(EMBEDDING_DIM))
+            self.index.add_with_ids(
+                x=np.array(
+                    [embedding.values for embedding in embeddings], dtype=np.float32
+                ),
+                ids=np.array(
+                    [embedding.track_id for embedding in embeddings], dtype=np.int64
+                ),
+            )
+            self.num_embeddings = self.index.ntotal
+            logging.info(f"The KNN Index contains {self.index.ntotal} vectors")
+            self.enabled = True
+        else:
+            self.enabled = False
 
     def __call__(
         self,
@@ -41,6 +47,9 @@ class KNN:
         queries are treated as multiple embeddings to be reduced to a single query
         via their (possibly weighted) Frechet mean with a 127-sphere metric.
         """
+        if not self.enabled:
+            return [], []
+
         if isinstance(query[0], list):
             as_array = spherical_mean(query, weights=weights)[np.newaxis, :]
         elif isinstance(query) and query.shape[0] > 1:
