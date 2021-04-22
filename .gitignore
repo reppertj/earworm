@@ -16,6 +16,8 @@
 **/media_files/**
 
 **/**.env
+**/**.env.production
+**/**.env.local
 **/.env/**
 
 # Ignore socket files
