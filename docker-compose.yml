@@ -183,6 +183,11 @@ services:
 
 volumes:
   app-db-data:
+    # Edit these lines to match your production block storage settings
+    # Delete them to use local storage
+    driver: rexray/dobs:latest
+    driver_opts:
+      size: 10
 
 networks:
   traefik-public:

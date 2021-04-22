@@ -94,6 +94,11 @@ volumes:
   # Traefik is always deployed to the same Docker node with the same volume containing
   # the HTTPS certificates
   traefik-public-certificates:
+    # Edit these lines to match your production block storage settings
+    # Delete them to use local storage
+    driver: rexray/dobs:latest
+    driver_opts:
+      size: 1
 
 networks:
   # Use the previously created public network "traefik-public", shared with other
