@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import makeStyles from '@material-ui/core/styles/makeStyles';
 import Typography from '@material-ui/core/Typography';
 import Link from '@material-ui/core/Link';
+import GitHubIcon from '@material-ui/icons/GitHub';
 
 import AppBar from '../../components/AppBar';
 import MusicSearchForm from '../../components/SearchInputs/SearchMeta/SearchForm';
@@ -47,8 +48,8 @@ export function HomePage() {
         <ReactQueryDevtools initialIsOpen={false} />
       </main>
       <footer className={classes.footer}>
-        <Typography variant="h6" align="center" gutterBottom>
-          {/* Footer */}
+        <Typography variant="subtitle2" align="center" gutterBottom>
+          Earworm is a work in progress. Results may vary!
         </Typography>
         <Typography
           variant="subtitle1"
@@ -61,7 +62,7 @@ export function HomePage() {
             rel="noopener"
             href="https://github.com/reppertj/earworm/"
           >
-            Github
+            {<GitHubIcon fontSize="small" />} Github
           </Link>
         </Typography>
         <Copyright />

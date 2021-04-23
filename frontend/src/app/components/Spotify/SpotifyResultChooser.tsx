@@ -78,7 +78,7 @@ function ResultListItem(props: ResultListItemProps) {
     setCurrentlyPlayingRef,
   } = props;
   const primaryText = item.name ? item.name : 'untitled';
-  var secondaryText = (item.artist ? item.artist : 'unknown artist') + ' ⸱ ';
+  var secondaryText = (item.artist ? item.artist : 'unknown artist') + ' | ';
   secondaryText += item.album ? item.album : 'unknown album';
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
@@ -131,7 +131,6 @@ function ResultListItem(props: ResultListItemProps) {
 
   return (
     <ListItem key={item.key}>
-      {/* <ListItemIcon> */}
       <Radio
         color="secondary"
         checked={selected}
@@ -139,7 +138,6 @@ function ResultListItem(props: ResultListItemProps) {
         value={item.key}
         inputProps={{ 'aria-label': item.name }}
       />
-      {/* </ListItemIcon> */}
       <ListItemText
         className={classes.listItem}
         onClick={handleClick}

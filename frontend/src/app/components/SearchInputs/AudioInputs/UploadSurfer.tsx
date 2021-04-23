@@ -273,7 +273,7 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
           </Box>
           <div className="controls">
             <Grid container justify="space-between" alignItems="flex-start">
-              <Grid item xs={5}>
+              <Grid item xs={8}>
                 <Button
                   variant="contained"
                   size="small"
@@ -325,7 +325,7 @@ const UploadSurfer = memo((props: UploadSurferProps) => {
                     }
                   })}
               </Grid>
-              <Grid container item xs={5} alignItems="center">
+              <Grid container item xs={4} justify="flex-end">
                 {loaded && (
                   <Grid item>
                     <Button
