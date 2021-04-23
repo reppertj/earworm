@@ -48,7 +48,7 @@ export function HomePage() {
       </main>
       <footer className={classes.footer}>
         <Typography variant="h6" align="center" gutterBottom>
-          Footer
+          {/* Footer */}
         </Typography>
         <Typography
           variant="subtitle1"
