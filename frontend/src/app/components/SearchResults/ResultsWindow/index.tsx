@@ -24,6 +24,7 @@ import Typography from '@material-ui/core/Typography';
 interface Props {}
 
 export function ResultsWindow(props: Props) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [page, setPage] = useState(0);
   const allEmbeddings = useSelector(selectAllEmbeddings);
   const dispatch = useDispatch();

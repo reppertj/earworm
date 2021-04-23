@@ -10,6 +10,7 @@ const backendAxios = axios.create({
 });
 
 export const postEmbeddingsSearch = ({ queryKey }) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_key, embeddings, page] = queryKey;
   const data = {
     k: (page + 1) * 50,

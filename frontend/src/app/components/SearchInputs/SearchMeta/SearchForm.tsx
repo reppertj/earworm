@@ -34,7 +34,7 @@ import { selectSpotifyAuth } from '../../Spotify/slice/selectors';
 import { useAudioSourcesSlice } from '../AudioInputs/slice';
 import { Source } from '../AudioInputs/slice/types';
 import { nanoid } from '@reduxjs/toolkit';
-import { embeddingsActions, useEmbeddingsSlice } from './slice';
+import { useEmbeddingsSlice } from './slice';
 
 var inferenceWorker = new Worker();
 
@@ -260,7 +260,7 @@ function SearchWindow(props) {
   >(undefined);
   const dispatch = useDispatch();
   const { actions: errorActions } = useErrorSlice();
-  const { actions: embeddingActions } = useEmbeddingsSlice();
+  const { actions: embeddingsActions } = useEmbeddingsSlice();
   const numSources = useSelector(selectNumSources);
   const numRegions = useSelector(selectNumRegions);
   const regions = useSelector(selectAllRegions);
@@ -357,6 +357,7 @@ function SearchWindow(props) {
     },
     [
       dispatch,
+      embeddingsActions,
       errorActions,
       numRegions,
       numSources,

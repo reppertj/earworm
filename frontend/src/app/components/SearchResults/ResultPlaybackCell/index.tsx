@@ -4,7 +4,6 @@
  *
  */
 import React, {
-  memo,
   useState,
   useRef,
   useMemo,
@@ -16,7 +15,6 @@ import { AudioButton } from '../../Playback/AudioButton';
 import PlayCircleOutlineIcon from '@material-ui/icons/PlayCircleOutline';
 import PauseCircleOutlineIcon from '@material-ui/icons/PauseCircleOutline';
 import IconButton from '@material-ui/core/IconButton';
-import Box from '@material-ui/core/Box';
 
 interface Props {
   url: string;
