@@ -71,8 +71,8 @@ class EmbeddingBase(CRUDBase[Embedding, EmbeddingCreate, EmbeddingUpdate]):
         subq = db.query(Embedding_Model).filter_by(name=embed_model_name).subquery()
         return (
             db.query(Embedding)
-            .join(subq, Embedding.embedding_model_id == subq.c.id)
             .filter_by(track_id=track_id)
+            .join(subq, Embedding.embedding_model_id == subq.c.id)
             .first()
         )
 
