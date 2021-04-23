@@ -52,7 +52,6 @@ export function ResultsWindow(props: Props) {
         message: 'Error communicating with the server.',
       }),
     );
-    dispatch(resultsActions.searchResultsAllRemoved());
   } else if (!isLoading && data) {
     const flattened = data.data.map(result => ({
       id: nanoid(),
