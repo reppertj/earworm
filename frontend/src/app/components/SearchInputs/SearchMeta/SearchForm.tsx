@@ -188,8 +188,8 @@ function UploadWindow(props: UploadWindowProps) {
                       Looking for that perfect song to use in your next video or
                       game?
                       <br />
-                      Find something similar to what you already love with an
-                      AI-powered search.
+                      Find something similar to what you already love, where
+                      your search term is the audio itself.
                     </Typography>
                   </Container>
                 </Box>

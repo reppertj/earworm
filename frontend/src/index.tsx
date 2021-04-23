@@ -25,30 +25,19 @@ import reportWebVitals from 'reportWebVitals';
 // Initialize languages
 import './locales/i18n';
 
-// GA
-import GA4React from 'ga-4-react';
-const gaId = process.env.REACT_APP_GA_MEASUREMENT_ID;
-const ga4react = new GA4React(gaId ?? '');
-
 // Redux/Saga
 const store = configureAppStore();
 store.runSaga(rootSaga);
 const MOUNT_NODE = document.getElementById('root') as HTMLElement;
 
-(async () => {
-  try {
-    await ga4react.initialize();
-    ga4react.gtag('set', { cookie_flags: 'SameSite=None;Secure' });
-  } catch (e) {}
-  ReactDOM.render(
-    <Provider store={store}>
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    </Provider>,
-    MOUNT_NODE,
-  );
-})();
+ReactDOM.render(
+  <Provider store={store}>
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  </Provider>,
+  MOUNT_NODE,
+);
 
 // Hot reloadable translation json files
 if (module.hot) {
@@ -57,14 +46,4 @@ if (module.hot) {
   });
 }
 
-// Measure performance experienced by end users
-function vitalsToAnalytics({ id, name, value }) {
-  ga4react.gtag('event', name, {
-    event_category: 'Web Vitals',
-    event_label: id,
-    value: Math.round(name === 'CLS' ? value * 1000 : value),
-    non_interaction: true,
-  });
-}
-
-reportWebVitals(vitalsToAnalytics);
+reportWebVitals();

@@ -10,7 +10,6 @@ import IconButton from '@material-ui/core/IconButton';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import GREY from '@material-ui/core/colors/grey';
 import { selectSourcesAvailable } from '../SearchInputs/AudioInputs/slice/selectors';
-import { useGA4React } from 'ga-4-react';
 
 const useStyles = makeStyles((theme: Theme) => ({
   margin: {
@@ -48,19 +47,12 @@ export default function SearchButton(props: Props) {
   const { actions } = useSpotifyAuthSlice();
   const numSourcesAvailable = useSelector(selectSourcesAvailable);
   const classes = useStyles();
-  const ga4 = useGA4React();
   const controller = new AbortController();
 
   const initiateGetResult = async ev => {
     ev.preventDefault();
     if (searchInput.length > 0) {
       try {
-        if (ga4) {
-          ga4.gtag('event', 'spotifySearch', {
-            event_category: 'search',
-            event_label: searchInput,
-          });
-        }
         setSearching(true);
         const progressTimer = setTimeout(setProgress(true), 1000);
         const apiTimer = setTimeout(() => controller.abort(), 6000);
