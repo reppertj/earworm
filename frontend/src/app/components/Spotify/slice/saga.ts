@@ -1,5 +1,6 @@
 import { take, call } from 'redux-saga/effects';
 import { spotifyAuthActions as actions } from '.';
+import { PayloadAction } from '@reduxjs/toolkit';
 
 import ls from 'local-storage';
 
@@ -16,7 +17,11 @@ export function getTokenExpiryFromLocalStorage() {
   return { loggedIn: false, token: undefined, expiry: undefined };
 }
 
-function assignTokenExpiryToLocalStorage({ payload }) {
+function assignTokenExpiryToLocalStorage({
+  payload,
+}: {
+  payload: { token: string; expiry: number };
+}) {
   if (payload.token && payload.expiry) {
     (ls as any).backend(localStorage);
     ls('SpotifyAccessToken', payload.token);
@@ -25,6 +30,8 @@ function assignTokenExpiryToLocalStorage({ payload }) {
 }
 
 export function* spotifyAuthSaga() {
-  const action = yield take(actions.logIn.type);
+  const action: PayloadAction<{ token: string; expiry: number }> = yield take(
+    actions.logIn.type,
+  );
   yield call(assignTokenExpiryToLocalStorage, action);
 }

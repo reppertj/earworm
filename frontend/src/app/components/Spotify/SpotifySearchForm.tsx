@@ -49,7 +49,11 @@ export default function SearchButton(props: Props) {
   const classes = useStyles();
   const controller = new AbortController();
 
-  const initiateGetResult = async ev => {
+  const initiateGetResult = async (
+    ev:
+      | React.MouseEvent<HTMLButtonElement, MouseEvent>
+      | React.FormEvent<HTMLFormElement>,
+  ) => {
     ev.preventDefault();
     if (searchInput.length > 0) {
       try {
@@ -75,7 +79,8 @@ export default function SearchButton(props: Props) {
           throw new Error('Non-200 code received from Spotify');
         }
         result.json().then(data => {
-          props.setSpotifyResults(data);
+          console.log(data);
+          props.setSpotifyResults(data.tracks.items);
         });
       } catch (error) {
         console.log('error', error);
@@ -92,7 +97,9 @@ export default function SearchButton(props: Props) {
     }
   };
 
-  const handleSearchChange = ev => {
+  const handleSearchChange = (
+    ev: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     ev.preventDefault();
     setSearchInput(ev.target.value);
   };

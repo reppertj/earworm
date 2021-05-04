@@ -44,9 +44,20 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-function MusicSearchForm(props) {
+export type RawSpotifyResult = {
+  artists: { name: string }[];
+  album: { name: string };
+  name: string;
+  preview_url: string | null;
+};
+
+// Todo: props type
+
+function MusicSearchForm(props: any) {
   const [hasError, setHasError] = useState({ error: false, message: '' });
-  const [spotifyResults, setSpotifyResults] = useState<any>(null);
+  const [spotifyResults, setSpotifyResults] = useState<
+    RawSpotifyResult[] | null
+  >(null);
   const [chooserOpen, setChooserOpen] = useState(false);
   const dispatch = useDispatch();
   const { actions: errorActions } = useErrorSlice();
@@ -86,16 +97,7 @@ function MusicSearchForm(props) {
 
   useEffect(() => {
     if (!chooserOpen && spotifyResults) {
-      if (!spotifyResults.tracks) {
-        dispatch(
-          errorActions.errorAdded({
-            id: nanoid(),
-            error: true,
-            message:
-              "Couldn't process the results from Spotify. Sorry about that.",
-          }),
-        );
-      } else if (spotifyResults.tracks.items.length < 1) {
+      if (spotifyResults.length < 1) {
         dispatch(
           errorActions.errorAdded({
             id: nanoid(),
@@ -113,7 +115,7 @@ function MusicSearchForm(props) {
     <>
       <UploadWindow SpotifyElement={SpotifyElement} />
 
-      {chooserOpen && (
+      {chooserOpen && spotifyResults && (
         <SpotifyChooser
           spotifyResults={spotifyResults}
           setSpotifyResults={setSpotifyResults}
@@ -222,7 +224,7 @@ function UploadWindow(props: UploadWindowProps) {
                 <Grid item>
                   <ConditionalWrapper
                     condition={numSourcesAvailable < 1}
-                    wrapper={children => (
+                    wrapper={(children: React.ReactElement<any, any>) => (
                       <Tooltip title="Clear a track to add more.">
                         {children}
                       </Tooltip>
@@ -253,7 +255,9 @@ function UploadWindow(props: UploadWindowProps) {
   );
 }
 
-function SearchWindow(props) {
+interface SearchWindowProps {}
+
+function SearchWindow(props: SearchWindowProps) {
   const [searching, setSearching] = useState(false);
   const [searchProgressLabel, setSearchProgressLabel] = useState<
     string | undefined

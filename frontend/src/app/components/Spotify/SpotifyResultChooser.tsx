@@ -26,19 +26,14 @@ import Radio from '@material-ui/core/Radio';
 import { AudioButton } from '../Playback/AudioButton/AudioButton';
 import { useDispatch } from 'react-redux';
 import { useAudioSourcesSlice } from '../SearchInputs/AudioInputs/slice';
+import { RawSpotifyResult } from '../SearchInputs/SearchMeta/SearchForm';
 import { nanoid } from '@reduxjs/toolkit';
 
 const useStyles = makeStyles(theme => ({
   listItem: { cursor: 'pointer' },
 }));
 
-function removeUnpreviewableItems(items: any[]): any[] {
-  return items.filter(item => {
-    return item.preview_url !== null;
-  });
-}
-
-interface SpotifyResult {
+export interface SpotifyResult {
   key: number;
   playing: boolean;
   artist: string | undefined;
@@ -47,7 +42,18 @@ interface SpotifyResult {
   previewUrl: string | undefined;
 }
 
-function getInfo(item, index: number): SpotifyResult {
+function removeUnpreviewableItems(
+  items: RawSpotifyResult[],
+): (RawSpotifyResult & { preview_url: string })[] {
+  return items.filter(item => {
+    return item.preview_url !== null;
+  }) as any;
+}
+
+function getInfo(
+  item: RawSpotifyResult & { preview_url: string },
+  index: number,
+): SpotifyResult {
   return {
     key: index,
     playing: false,
@@ -61,7 +67,7 @@ function getInfo(item, index: number): SpotifyResult {
 interface ResultListItemProps {
   item: SpotifyResult;
   selectedValue: number;
-  handleChange;
+  handleChange: (ev: any) => void;
   currentlyPlayingRef: unknown;
   setCurrentlyPlayingRef: React.Dispatch<unknown>;
 }
@@ -160,7 +166,7 @@ function ResultListItem(props: ResultListItemProps) {
 }
 
 interface SpotifyChooserProps {
-  spotifyResults: any; // TODO: Fix types for this, json response from Spotify API
+  spotifyResults: RawSpotifyResult[];
   setSpotifyResults: React.Dispatch<any>;
   open: true;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -173,7 +179,7 @@ export function SpotifyChooser(props: SpotifyChooserProps) {
   const dispatch = useDispatch();
   const { actions } = useAudioSourcesSlice();
 
-  const items: Array<any> = props.spotifyResults.tracks.items;
+  const items = props.spotifyResults;
   const processed = removeUnpreviewableItems(items).map(getInfo).slice(0, 30);
 
   const handleChange = useCallback(
